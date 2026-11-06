@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YTMusic → MP3 · Descarga tus playlists en tu propia PC</title>
+<meta name="description" content="Aplicación local y personal para descargar playlists de YouTube Music como MP3 de alta calidad. Código abierto, sin servidores ni cuentas.">
+<meta property="og:title" content="YTMusic → MP3">
+<meta property="og:description" content="Descarga tus playlists de YouTube Music como MP3, en tu propia computadora.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<nav class="nav">
+  <div class="wrap">
+    <a class="brand" href="./">🎵 YTMusic → MP3</a>
+    <div class="nav-links">
+      <a href="#como-funciona">Cómo funciona</a>
+      <a href="#instalacion">Instalación</a>
+      <a href="#faq">FAQ</a>
+      <a class="btn small primary" href="https://github.com/SandovalJon/ytmp3" target="_blank" rel="noopener">Código en GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div class="hero-copy">
+      <span class="badge">Uso personal · Local · Código abierto</span>
+      <h1>Tu música,<br><span class="grad">fuera del navegador.</span></h1>
+      <p>Convierte playlists de YouTube / YouTube Music en archivos MP3 — de 128 a 320 kbps — directamente en tu propia computadora. Sin cuentas, sin servidores y sin costo.</p>
+      <div class="hero-cta">
+        <a class="btn primary" href="#instalacion">Quiero instalarla</a>
+        <a class="btn ghost" href="https://github.com/SandovalJon/ytmp3" target="_blank" rel="noopener">Ver el código →</a>
+      </div>
+    </div>
+
+    <div class="hero-art" aria-hidden="true">
+      <div class="app-window">
+        <div class="app-titlebar"><span></span><span></span><span></span></div>
+        <div class="app-body">
+          <div class="app-row"><div class="app-input">https://music.youtube.com/playlist?list=…</div><div class="app-btn">Cargar</div></div>
+          <div class="app-track"><i></i><div><b>Example - Kickstarts</b><small>Ministry of Sound</small></div><em>3:00</em></div>
+          <div class="app-track"><i></i><div><b>Example - Watch The Sun Come Up</b><small>Ministry of Sound</small></div><em>3:26</em></div>
+          <div class="app-track off"><i></i><div><b>(video eliminado)</b><small>no disponible</small></div><em>--:--</em></div>
+          <div class="app-progress"><div></div></div>
+          <div class="app-meta">01 - Example - Kickstarts.mp3 · 320 kbps</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="features">
+    <div class="feature"><div class="fi">🔗</div><h3>De URL a MP3</h3><p>Pega el enlace de cualquier playlist pública y verás las canciones con miniaturas, duración y artista.</p></div>
+    <div class="feature"><div class="fi">🎚️</div><h3>Hasta 320 kbps</h3><p>Elige 128, 192, 256 o 320 kbps. Portada y metadatos se incrustan en cada archivo.</p></div>
+    <div class="feature"><div class="fi">📁</div><h3>Orden automático</h3><p>Se crea una subcarpeta por playlist y las pistas quedan numeradas: <code>01 - Título.mp3</code></p></div>
+    <div class="feature"><div class="fi">✅</div><h3>Tú eliges qué bajar</h3><p>Selecciona canciones individuales; las eliminadas o privadas se desactivan solas.</p></div>
+    <div class="feature"><div class="fi">⏸️</div><h3>Progreso y control</h3><p>Barra de progreso en vivo, registro detallado y cancelación en cualquier momento.</p></div>
+    <div class="feature"><div class="fi">🔒</div><h3>100% local</h3><p>Corre en <code>127.0.0.1</code>. No hay cuentas, telemetría ni datos que salgan de tu PC.</p></div>
+  </section>
+
+  <section id="como-funciona" class="panel">
+    <h2>Cómo funciona</h2>
+    <ol class="steps">
+      <li><b>Pegas</b> la URL de la playlist de YouTube Music.</li>
+      <li>La app <b>lee</b> la playlist con <code>yt-dlp</code> (solo metadatos) y te muestra las pistas.</li>
+      <li><b>Seleccionas</b> calidad y canciones, y eliges la carpeta de destino.</li>
+      <li><code>yt-dlp</code> descarga el mejor audio y <code>ffmpeg</code> lo <b>convierte a MP3</b> con portada y metadatos.</li>
+      <li>Listo: tus archivos quedan <b>numerados y ordenados</b> en tu PC.</li>
+    </ol>
+  </section>
+
+  <section id="instalacion" class="panel">
+    <h2>Instalación (Windows)</h2>
+    <p class="muted">Requiere Python 3.11+ y conexión a Internet. Eso es todo.</p>
+    <pre class="code"><code><span class="c"># 1) Clona el repositorio</span>
+git clone https://github.com/SandovalJon/ytmp3.git
+cd ytmp3
+
+<span class="c"># 2) Crea el entorno virtual e instala dependencias</span>
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install yt-dlp flask imageio-ffmpeg
+
+<span class="c"># 3) (Opcional, recomendado) Deno para algunos formatos de YouTube</span>
+winget install --id DenoLand.Deno -e --scope user
+
+<span class="c"># 4) Arranca la app y abre el navegador</span>
+.venv\Scripts\python.exe app.py</code></pre>
+    <p class="hint">O simplemente haz doble clic en <code>Iniciar.cmd</code>. La app se abre en <code>http://127.0.0.1:5088</code>.</p>
+  </section>
+
+  <section id="faq" class="panel">
+    <h2>Preguntas frecuentes</h2>
+
+    <details open><summary>¿Por qué no descarga directo desde esta página web?</summary>
+      <p>GitHub Pages solo entrega archivos estáticos; no puede ejecutar el motor de descarga. La conversión ocurre siempre en tu PC, que es lo que hace que funcione y que sea privada.</p>
+    </details>
+    <details><summary>¿Funciona con playlists privadas?</summary>
+      <p>Sí. Exporta tus cookies con una extensión tipo “Get cookies.txt LOCALLY”, guarda el archivo y pega su ruta en la sección “Playlist privada” de la app. Las cookies nunca salen de tu equipo.</p>
+    </details>
+    <details><summary>¿Qué hago si YouTube pide “inicia sesión para confirmar que no eres un bot”?</summary>
+      <p>Es una protección anti-bots. Usar el archivo de cookies (como arriba) suele resolverlo. Conéctate una vez desde tu navegador e inténtalo de nuevo.</p>
+    </details>
+    <details><summary>¿Puedo descargar videos eliminados o privados?</summary>
+      <p>No. Aparecen atenuados con su casilla deshabilitada; no se pueden ni tiene sentido intentarlo.</p>
+    </details>
+    <details><summary>¿Es legal?</summary>
+      <p>La herramienta es para uso personal con contenido que tienes derecho a escuchar o descargar. Descargar contenido protegido sin autorización puede violar los Términos de Servicio de YouTube y las leyes de tu país. No está afiliada a YouTube ni a Google. Úsala con criterio.</p>
+    </details>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p><b>YTMusic → MP3</b> · Código abierto en <a href="https://github.com/SandovalJon/ytmp3" target="_blank" rel="noopener">github.com/SandovalJon/ytmp3</a></p>
+    <p class="muted">Uso personal y local · Respeta los Términos de Servicio de YouTube y los derechos de autor · No afiliado a YouTube ni a Google</p>
+  </div>
+</footer>
+
+</body>
+</html>

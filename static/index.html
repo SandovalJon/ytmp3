@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YTMusic → MP3 · Descarga tus playlists</title>
+<meta name="description" content="Convierte y descarga tus playlists de YouTube Music a MP3, para uso personal.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>YTMusic <span class="arrow">→</span> MP3</h1>
+    <p>Descarga tus playlists de YouTube Music como MP3 de alta calidad, en tu propia computadora.</p>
+    <span class="badge">Uso personal · Sin cuentas · Sin servidores externos</span>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- Paso 1: playlist -->
+  <section class="card" id="step-load">
+    <h2><span class="num">1</span> Pega tu playlist</h2>
+    <form id="playlist-form" autocomplete="off">
+      <label for="url">URL de la playlist (YouTube Music o YouTube)</label>
+      <div class="row">
+        <input type="url" id="url" name="url" required
+               placeholder="https://music.youtube.com/playlist?list=..." />
+        <button type="submit" id="btn-load" class="btn primary">Cargar playlist</button>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <label for="quality">Calidad de audio</label>
+          <select id="quality" name="quality">
+            <option value="320K">MP3 320 kbps (mejor)</option>
+            <option value="256K">MP3 256 kbps</option>
+            <option value="192K" selected>MP3 192 kbps (equilibrado)</option>
+            <option value="128K">MP3 128 kbps (ligero)</option>
+          </select>
+        </div>
+        <div>
+          <label for="out_dir">Carpeta de destino</label>
+          <input type="text" id="out_dir" name="out_dir" placeholder="C:\Users\tu-usuario\Music\..." />
+        </div>
+      </div>
+
+      <details class="advanced">
+        <summary>Playlist privada / aviso de "inicia sesión para confirmar que no eres un bot"</summary>
+        <label for="cookies_file">Archivo cookies.txt (opcional)</label>
+        <input type="text" id="cookies_file" name="cookies_file"
+               placeholder="C:\ruta\cookies.txt" />
+        <p class="hint">Exporta las cookies de tu navegador con una extensión tipo “Get cookies.txt LOCALLY” y pega aquí la ruta. Se usa solo en tu equipo; no se sube a ningún sitio.</p>
+      </details>
+
+      <p id="load-error" class="error" hidden></p>
+    </form>
+  </section>
+
+  <!-- Paso 2: canciones -->
+  <section class="card" id="step-tracks" hidden>
+    <div class="card-head">
+      <h2><span class="num">2</span> <span id="playlist-title">Playlist</span></h2>
+      <span id="playlist-meta" class="muted"></span>
+    </div>
+
+    <div class="toolbar">
+      <div class="check-inline">
+        <input type="checkbox" id="check-all" checked>
+        <label for="check-all">Seleccionar todo</label>
+      </div>
+      <span class="muted"><strong id="sel-count">0</strong> de <strong id="tot-count">0</strong> seleccionadas</span>
+      <button id="btn-download" class="btn primary">Descargar seleccionadas</button>
+    </div>
+
+    <ul id="track-list" class="tracks"></ul>
+  </section>
+
+  <!-- Paso 3: progreso -->
+  <section class="card" id="step-jobs" hidden>
+    <div class="card-head">
+      <h2><span class="num">3</span> Descargas</h2>
+      <button id="btn-open-folder" class="btn ghost" type="button">Abrir carpeta</button>
+    </div>
+    <div id="jobs"></div>
+  </section>
+
+  <footer>
+    <p>Herramienta para uso personal con contenido que tienes derecho a escuchar/descargar. Respeta los derechos de autor y los Términos de Servicio de YouTube. No está afiliada a YouTube ni a Google.</p>
+  </footer>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
