@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Paleta del repo original (static/style.css) -->
+    <color name="bg">#0F1117</color>
+    <color name="card">#1A1D27</color>
+    <color name="card2">#161A24</color>
+    <color name="border">#2A2E3D</color>
+    <color name="text">#E6E8EE</color>
+    <color name="muted">#8A90A5</color>
+    <color name="accent">#6C8CFF</color>
+    <color name="accent2">#B06CFF</color>
+    <color name="ok">#35D07F</color>
+    <color name="err">#FF6B6B</color>
+    <color name="warn">#FFC857</color>
+    <color name="white">#FFFFFF</color>
+</resources>

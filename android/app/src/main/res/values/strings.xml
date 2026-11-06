@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">YTMusic → MP3</string>
+    <string name="subtitle">Descarga tus playlists de YouTube Music como MP3 de alta calidad, en tu propio teléfono.</string>
+    <string name="badge">Uso personal · Sin cuentas · Sin servidores externos</string>
+    <string name="step1">1 · Pega tu playlist</string>
+    <string name="url_label">URL de la playlist (YouTube Music o YouTube)</string>
+    <string name="url_hint">https://music.youtube.com/playlist?list=…</string>
+    <string name="load_playlist">Cargar playlist</string>
+    <string name="loading_playlist">Leyendo playlist…</string>
+    <string name="quality_label">Calidad de audio</string>
+    <string name="q320">MP3 320 kbps (mejor)</string>
+    <string name="q256">MP3 256 kbps</string>
+    <string name="q192">MP3 192 kbps (equilibrado)</string>
+    <string name="q128">MP3 128 kbps (ligero)</string>
+    <string name="cookies_title">Playlist privada / aviso de “inicia sesión para confirmar que no eres un bot”</string>
+    <string name="cookies_button">Elegir archivo cookies.txt</string>
+    <string name="cookies_none">Sin cookies (solo playlists públicas)</string>
+    <string name="cookies_hint">Exporta las cookies de tu navegador con una extensión tipo “Get cookies.txt LOCALLY” y elige el archivo aquí. Se usa solo en tu teléfono; no se sube a ningún sitio.</string>
+    <string name="update_engine">Actualizar motor yt-dlp</string>
+    <string name="step2">2 · Canciones</string>
+    <string name="select_all">Seleccionar todo</string>
+    <string name="selected_count">%1$d de %2$d seleccionadas</string>
+    <string name="download_selected">Descargar seleccionadas</string>
+    <string name="unavailable">no disponible</string>
+    <string name="step3">3 · Descargas</string>
+    <string name="open_folder">Abrir carpeta</string>
+    <string name="cancel">Cancelar</string>
+    <string name="no_downloads">Aún no hay descargas.</string>
+    <string name="disclaimer">Herramienta para uso personal con contenido que tienes derecho a escuchar/descargar. Respeta los derechos de autor y los Términos de Servicio de YouTube. No está afiliada a YouTube ni a Google.</string>
+    <string name="notif_channel">Descargas de música</string>
+    <string name="notif_title">Descargando música</string>
+    <string name="err_invalid_url">Introduce una URL válida de YouTube o YouTube Music.</string>
+    <string name="err_no_selection">No hay canciones seleccionadas.</string>
+    <string name="err_engine">No se pudo iniciar el motor de descarga (yt-dlp). Reintenta al abrir la app.</string>
+    <string name="engine_ready">Motor yt-dlp listo.</string>
+    <string name="engine_updating">Actualizando yt-dlp…</string>
+    <string name="engine_updated">yt-dlp actualizado a la última versión.</string>
+    <string name="engine_update_failed">No se pudo actualizar yt-dlp: %1$s</string>
+    <string name="cookies_loaded">Cookies cargadas: %1$s</string>
+    <string name="songs_done">%1$d/%2$d canciones · %3$d errores</string>
+</resources>
