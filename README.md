@@ -30,3 +30,5 @@ Algunas listas requieren sesi√≥n. Exporta las cookies de tu navegador con una ex
 - El progreso se actualiza solo. Puedes cancelar una descarga en curso.
 - Si una canci√≥n falla, el resto contin√∫a y el error queda anotado en el registro del trabajo.
 - Las descargas grandes pueden tardar; no cierres la ventana negra (la consola) mientras descarga.
+
+- P·gina de presentaciÛn del proyecto: https://sandovaljon.github.io/ytmp3/
