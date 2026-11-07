@@ -3,9 +3,9 @@
     <string name="app_name">YTMusic → MP3</string>
     <string name="subtitle">Descarga tus playlists de YouTube Music como MP3 de alta calidad, en tu propio teléfono.</string>
     <string name="badge">Uso personal · Sin cuentas · Sin servidores externos</string>
-    <string name="step1">1 · Pega tu playlist</string>
-    <string name="url_label">URL de la playlist (YouTube Music o YouTube)</string>
-    <string name="url_hint">https://music.youtube.com/playlist?list=…</string>
+    <string name="step1">1 · Pega tu playlist o perfil</string>
+    <string name="url_label">URL de la playlist, canal o perfil (YouTube Music o YouTube)</string>
+    <string name="url_hint">https://music.youtube.com/playlist?list=… o …/music.youtube.com/@artista</string>
     <string name="load_playlist">Cargar playlist</string>
     <string name="loading_playlist">Leyendo playlist…</string>
     <string name="quality_label">Calidad de audio</string>
@@ -19,6 +19,10 @@
     <string name="cookies_hint">Exporta las cookies de tu navegador con una extensión tipo “Get cookies.txt LOCALLY” y elige el archivo aquí. Se usa solo en tu teléfono; no se sube a ningún sitio.</string>
     <string name="update_engine">Actualizar motor yt-dlp</string>
     <string name="step2">2 · Canciones</string>
+    <string name="filter_label">Mostrar</string>
+    <string name="f_songs">Solo canciones (sin Shorts)</string>
+    <string name="f_all">Todo (videos + Shorts)</string>
+    <string name="f_shorts">Solo Shorts</string>
     <string name="select_all">Seleccionar todo</string>
     <string name="selected_count">%1$d de %2$d seleccionadas</string>
     <string name="download_selected">Descargar seleccionadas</string>

@@ -54,6 +54,10 @@ object DownloadManager {
         _state.update { it.copy(quality = quality) }
     }
 
+    fun setListFilter(filter: String) {
+        _state.update { it.copy(listFilter = filter) }
+    }
+
     fun initEngine(context: Context) {
         scope.launch {
             val ok = YtDlpEngine.init(context)
@@ -94,6 +98,7 @@ object DownloadManager {
                         playlistTitle = info.title,
                         playlistUploader = info.uploader,
                         tracks = info.items,
+                        listFilter = FILTER_NO_SHORTS,
                         outDirDisplay = "Music/YouTube Music MP3/${sanitizeFilename(info.title)}"
                     )
                 }
@@ -116,18 +121,23 @@ object DownloadManager {
     }
 
     fun toggleAll(selected: Boolean) {
+        // Solo afecta a lo visible (respeta el filtro sin Shorts).
+        val visibleIds = _state.value.visibleTracks.map { it.id }.toSet()
         _state.update {
             it.copy(tracks = it.tracks.map { t ->
-                if (t.unavailable) t else t.copy(selected = selected)
+                if (t.unavailable || t.id !in visibleIds) t else t.copy(selected = selected)
             })
         }
     }
 
     fun selectedTracks(): List<Track> = _state.value.tracks.filter { it.selected && !it.unavailable }
 
+    /** Lo que realmente se descarga: visibles + seleccionadas + disponibles. */
+    fun downloadableTracks(): List<Track> = _state.value.downloadableTracks
+
     /** Arranca el servicio en primer plano; el servicio ejecuta runDownload(). */
     fun startDownload(context: Context) {
-        val selected = selectedTracks()
+        val selected = downloadableTracks()
         if (selected.isEmpty() || _state.value.jobActive) return
         val intent = Intent(context, DownloadService::class.java)
             .setAction(DownloadService.ACTION_START)
@@ -151,7 +161,7 @@ object DownloadManager {
     /** Bucle de descarga, ejecutado por DownloadService. */
     suspend fun runDownload(context: Context) {
         val snapshot = _state.value
-        val selected = snapshot.tracks.filter { it.selected && !it.unavailable }
+        val selected = snapshot.downloadableTracks
         if (selected.isEmpty()) return
         cancelled = false
         val playlistTitle = snapshot.playlistTitle.ifBlank { "Playlist" }

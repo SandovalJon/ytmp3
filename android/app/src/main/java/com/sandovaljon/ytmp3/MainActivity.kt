@@ -40,8 +40,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var adapter: TrackAdapter
 
-    private val qualities = listOf("320K", "256K", "192K", "128K")
-    // No llamar a getString() aquí: las propiedades se evalúan en el
+    private val qualities = listOf("320K", "256K", "192K", "128K")    // No llamar a getString() aquí: las propiedades se evalúan en el
     // constructor, antes de onCreate(), y eso cerraba la app al abrirla
     // con "System services not available to Activities before onCreate()".
     // Con lazy se evalúa en el primer uso, ya dentro de onCreate().
@@ -49,6 +48,13 @@ class MainActivity : AppCompatActivity() {
         listOf(
             getString(R.string.q320), getString(R.string.q256),
             getString(R.string.q192), getString(R.string.q128)
+        )
+    }
+    private val filterValues = listOf(FILTER_NO_SHORTS, FILTER_ALL, FILTER_ONLY_SHORTS)
+    private val filterLabels by lazy {
+        listOf(
+            getString(R.string.f_songs), getString(R.string.f_all),
+            getString(R.string.f_shorts)
         )
     }
 
@@ -102,6 +108,20 @@ class MainActivity : AppCompatActivity() {
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
 
+        // Filtro Solo canciones / Todo / Solo Shorts (solo visible con canales).
+        binding.spFilter.adapter = ArrayAdapter(
+            this, android.R.layout.simple_spinner_dropdown_item, filterLabels
+        )
+        binding.spFilter.setSelection(0)
+        binding.spFilter.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, pos: Int, id: Long) {
+                if (binding.spFilter.tag != "internal") {
+                    DownloadManager.setListFilter(filterValues[pos])
+                }
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+
         adapter = TrackAdapter(emptyList()) { track, checked ->
             DownloadManager.toggleTrack(track.id, checked)
         }
@@ -126,7 +146,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         binding.btnDownload.setOnClickListener {
-            if (DownloadManager.selectedTracks().isEmpty()) {
+            if (DownloadManager.downloadableTracks().isEmpty()) {
                 Toast.makeText(this, R.string.err_no_selection, Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
@@ -207,15 +227,28 @@ class MainActivity : AppCompatActivity() {
         if (state.tracks.isNotEmpty()) {
             binding.cardTracks.visibility = View.VISIBLE
             binding.tvPlaylistTitle.text = state.playlistTitle
+            val shown = state.visibleTracks
             binding.tvPlaylistMeta.text = listOf(
                 state.playlistUploader,
-                "${state.tracks.size} canciones"
+                "${shown.size} canciones"
             ).filter { it.isNotBlank() }.joinToString(" · ")
-            adapter.submit(state.tracks)
-            val selectable = state.tracks.filter { !it.unavailable }
-            val selected = state.tracks.count { it.selected && !it.unavailable }
+            // Filtro de Shorts: solo aparece si el canal trae esa pestaña.
+            binding.rowFilter.visibility = if (state.hasShorts) View.VISIBLE else View.GONE
+            val filterPos = when (state.listFilter) {
+                FILTER_ALL -> 1
+                FILTER_ONLY_SHORTS -> 2
+                else -> 0
+            }
+            if (binding.spFilter.selectedItemPosition != filterPos) {
+                binding.spFilter.tag = "internal"
+                binding.spFilter.setSelection(filterPos)
+                binding.spFilter.tag = null
+            }
+            adapter.submit(shown)
+            val selectable = shown.filter { !it.unavailable }
+            val selected = shown.count { it.selected && !it.unavailable }
             binding.tvSelCount.text = getString(
-                R.string.selected_count, selected, state.tracks.size
+                R.string.selected_count, selected, shown.size
             )
             binding.cbSelectAll.tag = "internal"
             binding.cbSelectAll.isChecked = selectable.isNotEmpty() && selectable.all { it.selected }

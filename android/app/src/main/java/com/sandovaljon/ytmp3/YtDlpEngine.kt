@@ -76,7 +76,10 @@ object YtDlpEngine {
     /**
      * Carga la playlist con `yt-dlp --flat-playlist -J` (solo metadata,
      * sin descargar nada), igual que playlist_info() en app.py.
-     * Acepta también la URL de un video suelto (se envuelve como lista de 1).
+     * Acepta también la URL de un video suelto (se envuelve como lista de 1)
+     * y URLs de canal/perfil (@handle, /channel/, /c/): las pestañas
+     * (Videos / Shorts) se aplanan en una sola lista con el origen en
+     * Track.tab, igual que en la web.
      */
     @Throws(Exception::class)
     fun loadPlaylist(url: String, cookiesFile: File?): PlaylistInfo {
@@ -96,26 +99,49 @@ object YtDlpEngine {
         val items = ArrayList<Track>()
         if (entries == null) {
             // Video suelto
-            val single = trackFromJson(data, 1)
+            val single = trackFromJson(data, 1, "")
             if (single != null) items.add(single)
         } else {
-            for (i in 0 until entries.length()) {
-                val e = entries.optJSONObject(i) ?: continue
-                val track = trackFromJson(e, i + 1)
-                if (track != null) items.add(track)
-            }
+            collectEntries(entries, "", items)
         }
         if (items.isEmpty()) {
             throw RuntimeException("La playlist está vacía o no es accesible (¿privada?).")
         }
+        // Reindexar tras aplanar (los canales traen tabs Videos + Shorts).
+        val reindexed = items.mapIndexed { i, t -> t.copy(index = i + 1) }
+        // Los Shorts quedan desmarcados por defecto: solo canciones.
+        val withDefaults = reindexed.map { t ->
+            if (isShortTab(t.tab) && !t.unavailable) t.copy(selected = false) else t
+        }
+        val lowered = url.lowercase()
+        val kind = if ("list=" in lowered) "playlist"
+            else if (listOf("/@", "/channel/", "/c/", "/user/", "music.youtube.com/@").any { lowered.contains(it) }) "canal"
+            else "playlist"
         return PlaylistInfo(
-            title = data.optString("title").ifBlank { "Playlist" },
+            title = data.optString("title")
+                .ifBlank { data.optString("channel").ifBlank { "Playlist" } },
             uploader = data.optString("uploader").ifBlank { data.optString("channel") },
-            items = items
+            items = withDefaults,
+            kind = kind
         )
     }
 
-    private fun trackFromJson(e: JSONObject, index: Int): Track? {
+    /** Aplana entries: si un elemento trae sus propios entries es una
+     *  pestaña (Videos / Shorts) o sub-playlist; se recorre en profundidad. */
+    private fun collectEntries(entries: org.json.JSONArray, tabName: String, out: ArrayList<Track>) {
+        for (i in 0 until entries.length()) {
+            val e = entries.optJSONObject(i) ?: continue
+            val nested = e.optJSONArray("entries")
+            if (nested != null) {
+                collectEntries(nested, e.optString("title").ifBlank { tabName }, out)
+                continue
+            }
+            val track = trackFromJson(e, out.size + 1, tabName)
+            if (track != null) out.add(track)
+        }
+    }
+
+    private fun trackFromJson(e: JSONObject, index: Int, tab: String = ""): Track? {
         val vid = e.optString("id").ifBlank {
             e.optString("url").substringAfter("v=").substringBefore("&")
         }
@@ -133,7 +159,8 @@ object YtDlpEngine {
             durationSec = if (e.has("duration") && !e.isNull("duration"))
                 e.optLong("duration") else null,
             thumbnailUrl = "https://i.ytimg.com/vi/$vid/mqdefault.jpg",
-            unavailable = unavailable
+            unavailable = unavailable,
+            tab = tab
         )
     }
 

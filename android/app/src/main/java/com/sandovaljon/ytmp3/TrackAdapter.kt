@@ -79,7 +79,8 @@ class TrackAdapter(
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val track = tracks[position]
         holder.title.text = track.title
-        holder.uploader.text = track.uploader.ifBlank { "" }
+        holder.uploader.text = listOf(track.uploader, track.tab)
+            .filter { it.isNotBlank() }.joinToString(" · ")
         holder.duration.text = formatDuration(track.durationSec)
         holder.itemView.alpha = if (track.unavailable) 0.45f else 1f
 
