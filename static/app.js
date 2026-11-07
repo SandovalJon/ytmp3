@@ -46,7 +46,8 @@ $("#playlist-form").addEventListener("submit", async (e) => {
 function renderPlaylist(data) {
   currentPlaylist = { title: data.title || "Playlist", items: data.items || [] };
   $("#playlist-title").textContent = currentPlaylist.title;
-  $("#playlist-meta").textContent = [data.uploader, `${data.count} canciones`].filter(Boolean).join(" · ");
+  const kindLabel = data.kind === "canal" ? "canal/perfil" : "playlist";
+  $("#playlist-meta").textContent = [data.uploader, `${data.count} ${kindLabel === "canal/perfil" ? "videos" : "canciones"}`].filter(Boolean).join(" · ");
 
   const ul = $("#track-list");
   ul.innerHTML = currentPlaylist.items.map((t) => `
@@ -55,7 +56,7 @@ function renderPlaylist(data) {
       <img src="${esc(t.thumbnail)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
       <div>
         <div class="t-title">${esc(t.title)}</div>
-        <div class="t-sub">${esc(t.uploader || "")}</div>
+        <div class="t-sub">${[esc(t.uploader || ""), esc(t.tab || "")].filter(Boolean).join(" · ")}</div>
       </div>
       <div class="t-dur">${fmtDur(t.duration)}</div>
     </li>`).join("");

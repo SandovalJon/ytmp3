@@ -73,7 +73,8 @@ def is_youtube_url(url: str) -> bool:
 
 
 def playlist_info(url: str):
-    # --flat-playlist: solo metadata, sin descargar nada
+    # --flat-playlist: solo metadata, sin descargar nada.
+    # Sirve para playlists, canales, perfiles (@handle) y tabs (/videos, /shorts).
     cmd = [sys.executable, "-m", "yt_dlp", "--flat-playlist", "-J", "--no-warnings", *JS_RUNTIME_ARGS, url]
     proc = subprocess.run(
         cmd, capture_output=True, text=True, encoding="utf-8",
@@ -90,28 +91,50 @@ def playlist_info(url: str):
         entries = [data] if data.get("id") else []
 
     items = []
-    for i, e in enumerate(entries, start=1):
-        if not e:
-            continue
-        vid = e.get("id") or (e.get("url") or "").split("v=")[-1].split("&")[0]
-        if not vid:
-            continue
-        raw_title = e.get("title") or ""
-        unavailable = (not raw_title.strip()) or raw_title.startswith(("[Private", "[Deleted"))
-        items.append({
-            "index": i,
-            "id": vid,
-            "title": raw_title.strip() or "(sin título)",
-            "uploader": e.get("uploader") or e.get("channel") or e.get("channel_id") or "",
-            "duration": e.get("duration"),
-            "thumbnail": f"https://i.ytimg.com/vi/{vid}/mqdefault.jpg",
-            "unavailable": unavailable,
-        })
+
+    def collect(node_list, tab_name: str | None = None):
+        for e in node_list or []:
+            if not e:
+                continue
+            nested = e.get("entries")
+            if isinstance(nested, list):
+                # Es una pestaña (Videos / Shorts) o sub-playlist: aplanar
+                collect(nested, tab_name=e.get("title") or tab_name)
+                continue
+            vid = e.get("id") or (e.get("url") or "").split("v=")[-1].split("&")[0]
+            if not vid:
+                continue
+            raw_title = e.get("title") or ""
+            unavailable = (not raw_title.strip()) or raw_title.startswith(("[Private", "[Deleted"))
+            items.append({
+                "id": vid,
+                "title": raw_title.strip() or "(sin título)",
+                "uploader": e.get("uploader") or e.get("channel") or e.get("channel_id") or "",
+                "duration": e.get("duration"),
+                "thumbnail": f"https://i.ytimg.com/vi/{vid}/mqdefault.jpg",
+                "unavailable": unavailable,
+                "tab": tab_name or "",
+            })
+
+    collect(entries)
+
+    # Reindexar tras aplanar (canales traen tabs Videos + Shorts)
+    for i, it in enumerate(items, start=1):
+        it["index"] = i
+
+    lowered = (url or "").lower()
+    if "list=" in lowered:
+        kind = "playlist"
+    elif any(k in lowered for k in ("/@", "/channel/", "/c/", "/user/", "music.youtube.com/@")):
+        kind = "canal"
+    else:
+        kind = "playlist"
 
     return {
-        "title": data.get("title") or "Playlist",
+        "title": data.get("title") or data.get("channel") or "Playlist",
         "uploader": data.get("uploader") or data.get("channel") or "",
         "count": len(items),
+        "kind": kind,
         "items": items,
     }
 
