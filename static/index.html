@@ -71,6 +71,13 @@
         <label for="check-all">Seleccionar todo</label>
       </div>
       <span class="muted"><strong id="sel-count">0</strong> de <strong id="tot-count">0</strong> seleccionadas</span>
+      <label class="muted" for="tab-filter" id="tab-filter-label" hidden>Mostrar:
+        <select id="tab-filter">
+          <option value="no-shorts">Solo canciones (sin Shorts)</option>
+          <option value="all">Todo (videos + Shorts)</option>
+          <option value="only-shorts">Solo Shorts</option>
+        </select>
+      </label>
       <button id="btn-download" class="btn primary">Descargar seleccionadas</button>
     </div>
 

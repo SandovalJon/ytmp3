@@ -49,8 +49,27 @@ function renderPlaylist(data) {
   const kindLabel = data.kind === "canal" ? "canal/perfil" : "playlist";
   $("#playlist-meta").textContent = [data.uploader, `${data.count} ${kindLabel === "canal/perfil" ? "videos" : "canciones"}`].filter(Boolean).join(" · ");
 
+  // Filtro de Shorts: visible solo si hay pestaña de Shorts; por defecto, fuera.
+  const hasShorts = currentPlaylist.items.some(t => /short/i.test(t.tab || ""));
+  const filterSel = $("#tab-filter");
+  $("#tab-filter-label").hidden = !hasShorts;
+  filterSel.value = "no-shorts";
+
+  renderTrackList();
+}
+
+function visibleItems() {
+  const mode = $("#tab-filter").value;
+  if ($("#tab-filter-label").hidden) return currentPlaylist.items;
+  if (mode === "only-shorts") return currentPlaylist.items.filter(t => /short/i.test(t.tab || ""));
+  if (mode === "no-shorts") return currentPlaylist.items.filter(t => !/short/i.test(t.tab || ""));
+  return currentPlaylist.items;
+}
+
+function renderTrackList() {
+  const shown = visibleItems();
   const ul = $("#track-list");
-  ul.innerHTML = currentPlaylist.items.map((t) => `
+  ul.innerHTML = shown.map((t) => `
     <li class="track${t.unavailable ? " unavailable" : ""}">
       <input type="checkbox" class="track-check" data-id="${esc(t.id)}" ${t.unavailable ? "" : "checked"} ${t.unavailable ? "disabled" : ""} aria-label="Seleccionar ${esc(t.title)}">
       <img src="${esc(t.thumbnail)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
@@ -61,11 +80,13 @@ function renderPlaylist(data) {
       <div class="t-dur">${fmtDur(t.duration)}</div>
     </li>`).join("");
 
-  $("#tot-count").textContent = currentPlaylist.items.length;
+  $("#tot-count").textContent = shown.length;
   updateSelCount();
   $("#step-tracks").hidden = false;
   $("#step-tracks").scrollIntoView({ behavior: "smooth", block: "start" });
 }
+
+$("#tab-filter").addEventListener("change", renderTrackList);
 
 function selectedItems() {
   const ids = new Set($$(".track-check:checked").map(cb => cb.dataset.id));
