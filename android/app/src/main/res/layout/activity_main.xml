@@ -372,6 +372,15 @@
                 android:textSize="13sp" />
 
             <TextView
+                android:id="@+id/tvJobFailed"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:textColor="@color/err"
+                android:textSize="12sp"
+                android:visibility="gone" />
+
+            <TextView
                 android:id="@+id/tvJobLog"
                 android:layout_width="match_parent"
                 android:layout_height="140dp"

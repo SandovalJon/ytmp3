@@ -281,6 +281,14 @@ class MainActivity : AppCompatActivity() {
             binding.tvJobCurrent.text = if (state.currentTrack.isNotBlank()) {
                 "${state.currentTrack} — ${state.currentPercent.toInt()}%"
             } else ""
+            val failedTracks = state.tracks.filter { it.status == "error" || it.status == "cancelado" }
+            if (!state.jobActive && failedTracks.isNotEmpty()) {
+                binding.tvJobFailed.visibility = View.VISIBLE
+                binding.tvJobFailed.text = "Con error (${failedTracks.size}):\n" +
+                    failedTracks.joinToString("\n") { "• ${it.title}" }
+            } else {
+                binding.tvJobFailed.visibility = View.GONE
+            }
             binding.tvJobLog.text = state.log.takeLast(40).joinToString("\n")
             binding.btnCancel.visibility = if (state.jobActive) View.VISIBLE else View.GONE
         } else {
