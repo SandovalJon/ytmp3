@@ -262,6 +262,22 @@ def download_job(job: dict, items: list, quality: str, base_dir: str, cookies_fi
 
         else:
             job["status"] = "completado" if job["failed"] == 0 else "completado con errores"
+        # Limpieza: si yt-dlp no pudo incrustar la portada, la deja suelta (.webp/.jpg).
+        # Se borran esas imágenes; los .mp3 no se tocan.
+        try:
+            out = job.get("out_dir")
+            if out:
+                leftovers = [p for ext in ("*.webp", "*.jpg", "*.jpeg", "*.png")
+                             for p in Path(out).glob(ext) if p.is_file()]
+                for p in leftovers:
+                    try:
+                        p.unlink()
+                    except OSError:
+                        pass
+                if leftovers:
+                    log_job(job, f"Limpieza: {len(leftovers)} portada(s) suelta(s) eliminada(s)")
+        except Exception as exc:
+            log_job(job, f"Aviso: no se pudo limpiar portadas sueltas: {exc}")
         job["current"] = ""
     except Exception as exc:  # nunca tumbar el servidor por un job
         job["status"] = "error"
