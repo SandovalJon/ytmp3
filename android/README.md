@@ -53,13 +53,14 @@ escriben directamente en esa ruta pública.
 
 ## Versión
 
-**1.0.4** (versionCode 5, `com.sandovaljon.ytmp3`).
+**1.0.5** (versionCode 6, `com.sandovaljon.ytmp3`).
 
 - 1.0.0: primera versión.
 - 1.0.1: corrige el cierre al abrir (se llamaba a `getString()` antes de `onCreate()`).
 - 1.0.2: si YouTube bloquea la descarga, la app actualiza yt-dlp sola y reintenta una vez; si falla al incrustar la portada, reintenta sin incrustarla; usa `-f bestaudio/best` y muestra el error completo de yt-dlp en el registro.
 - 1.0.3: acepta canales y perfiles (`@handle`, `/channel/`, YouTube Music): aplana las pestañas Videos/Shorts; filtro "Solo canciones (sin Shorts)" por defecto, con opciones Todo / Solo Shorts; la pestaña de origen se muestra en cada fila.
 - 1.0.4: la tarjeta de descarga lista las canciones con error al terminar (antes solo se marcaban en la lista).
+- 1.0.5: calidad por defecto 320 kbps.
 
 El APK no se guarda en el repo (pesa unos 99 MB). Publícalo como asset de una Release de GitHub.
 
