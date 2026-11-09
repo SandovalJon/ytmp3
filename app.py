@@ -322,9 +322,9 @@ def api_playlist():
 def api_download():
     payload = request.get_json(silent=True) or {}
     items = payload.get("items") or []
-    quality = str(payload.get("quality") or "192K")
+    quality = str(payload.get("quality") or "320K")
     if quality not in {"128K", "192K", "256K", "320K"}:
-        quality = "192K"
+        quality = "320K"
     playlist_title = str(payload.get("playlist_title") or "Playlist")
     base_dir = str(payload.get("out_dir") or "").strip()
     cookies_file = str(payload.get("cookies_file") or "").strip() or None

@@ -95,12 +95,12 @@ class MainActivity : AppCompatActivity() {
 
         DownloadManager.initEngine(this)
 
-        // Calidad: por defecto 192K, como en la web original.
+        // Calidad: por defecto 320K, como en la web original.
         val spinnerAdapter = ArrayAdapter(
             this, android.R.layout.simple_spinner_dropdown_item, qualityLabels
         )
         binding.spQuality.adapter = spinnerAdapter
-        binding.spQuality.setSelection(2)
+        binding.spQuality.setSelection(0)
         binding.spQuality.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, pos: Int, id: Long) {
                 DownloadManager.setQuality(qualities[pos])

@@ -16,7 +16,7 @@ seleccionadas como `NN - Título.mp3` en
   título, autor, duración y miniatura por canción. Las privadas o
   eliminadas aparecen atenuadas con la casilla deshabilitada.
 - Seleccionar todo o canciones individuales.
-- Calidad MP3: 128K, 192K, 256K, 320K (por defecto 192K).
+- Calidad MP3: 128K, 192K, 256K, 320K (por defecto 320K).
 - Descarga con `--extract-audio --audio-format mp3 --embed-metadata
   --embed-thumbnail`, con progreso por canción y general, registro
   (log), cancelación y servicio en primer plano con notificación.

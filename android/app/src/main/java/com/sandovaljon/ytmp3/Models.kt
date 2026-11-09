@@ -37,7 +37,7 @@ data class UiState(
     val playlistTitle: String = "",
     val playlistUploader: String = "",
     val tracks: List<Track> = emptyList(),
-    val quality: String = "192K",
+    val quality: String = "320K",
     val listFilter: String = FILTER_NO_SHORTS,
     val cookiesName: String? = null,
     val jobActive: Boolean = false,
