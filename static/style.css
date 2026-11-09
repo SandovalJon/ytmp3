@@ -210,6 +210,16 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
   word-break: break-word;
 }
 .job-actions { margin-top: 10px; display: flex; gap: 8px; }
+.job-failed {
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: .8rem;
+}
+.job-failed summary { cursor: pointer; color: var(--warn); font-weight: 600; }
+.job-failed ul { margin: 8px 0 2px; padding-left: 20px; }
+.job-failed li { margin: 3px 0; word-break: break-word; }
 
 footer { text-align: center; margin-top: 28px; }
 footer p { color: var(--muted); font-size: .76rem; max-width: 640px; margin: 0 auto; line-height: 1.5; }

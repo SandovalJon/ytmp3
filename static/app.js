@@ -182,6 +182,7 @@ function renderJobs(jobs) {
     const inTrack = isFinal ? 0 : Math.min(Math.max(j.percent || 0, 0), 100) / 100;
     const width = isFinal ? 100 : (j.total ? Math.min(100, Math.round(((j.done + inTrack) / j.total) * 1000) / 10) : 0);
     const log = (j.log || []).slice(-12).join("\n");
+    const failed = (j.results || []).filter(r => r.status && r.status !== "ok");
     return `
     <div class="job" data-id="${esc(j.id)}">
       <div class="job-top">
@@ -193,6 +194,7 @@ function renderJobs(jobs) {
         <span>${j.done}/${j.total} canciones · ${j.failed} errores${j.current ? " · " + esc(j.current) : ""}</span>
         <span title="${esc(j.out_dir)}">${esc(j.out_dir)}</span>
       </div>
+      ${failed.length ? `<details class="job-failed"><summary>Ver ${failed.length} con error</summary><ul>${failed.map(r => `<li>${esc(r.title || r.id)} <span class="muted">(${esc(r.status)})</span></li>`).join("")}</ul></details>` : ""}
       ${log ? `<pre class="job-log">${esc(log)}</pre>` : ""}
       ${j.status === "descargando" ? `<div class="job-actions"><button class="btn ghost small" data-cancel="${esc(j.id)}">Cancelar</button></div>` : ""}
     </div>`;
