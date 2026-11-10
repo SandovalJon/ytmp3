@@ -12,6 +12,7 @@ import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -88,6 +89,8 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.RequestPermission()
     ) { /* El progreso también se ve dentro de la app. */ }
 
+    private var pendingUpdate: AppUpdater.UpdateInfo? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -139,6 +142,14 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
             }
         }
+        binding.btnCheckUpdate.setOnClickListener {
+            val pending = pendingUpdate
+            if (pending != null) {
+                askToDownloadUpdate(pending)
+            } else {
+                checkForAppUpdate(manual = true)
+            }
+        }
         binding.cbSelectAll.setOnCheckedChangeListener { _, checked ->
             // Evita el bucle al actualizar el checkbox desde render().
             if (binding.cbSelectAll.tag != "internal") {
@@ -168,6 +179,97 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 DownloadManager.state.collect { render(it) }
+            }
+        }
+
+        // Auto-chequeo silencioso al abrir (no molesta si no hay nada nuevo).
+        checkForAppUpdate(manual = false)
+    }
+
+    /** Comprueba GitHub Releases; si manual=true avisa también cuando ya estás al día. */
+    private fun checkForAppUpdate(manual: Boolean) {
+        binding.tvUpdateStatus.text = getString(R.string.checking_update)
+        binding.btnCheckUpdate.isEnabled = false
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val update = AppUpdater.check(this@MainActivity)
+                withContext(Dispatchers.Main) {
+                    binding.btnCheckUpdate.isEnabled = true
+                    if (update != null) {
+                        pendingUpdate = update
+                        val current = AppUpdater.currentVersion(this@MainActivity)
+                        binding.tvUpdateStatus.text =
+                            getString(R.string.update_available, update.versionName, current)
+                        binding.btnCheckUpdate.text =
+                            getString(R.string.update_download, update.versionName)
+                        if (manual) askToDownloadUpdate(update)
+                    } else {
+                        pendingUpdate = null
+                        binding.btnCheckUpdate.text = getString(R.string.check_update)
+                        if (manual) {
+                            val current = AppUpdater.currentVersion(this@MainActivity)
+                            binding.tvUpdateStatus.text = getString(R.string.app_up_to_date, current)
+                            Toast.makeText(
+                                this@MainActivity,
+                                getString(R.string.app_up_to_date, current),
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        } else {
+                            binding.tvUpdateStatus.text = ""
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    binding.btnCheckUpdate.isEnabled = true
+                    if (manual) {
+                        binding.tvUpdateStatus.text = getString(R.string.update_failed, e.message ?: "?")
+                    } else {
+                        binding.tvUpdateStatus.text = ""
+                    }
+                }
+            }
+        }
+    }
+
+    private fun askToDownloadUpdate(update: AppUpdater.UpdateInfo) {
+        val sizeMb = if (update.sizeBytes > 0) " (%.0f MB)".format(update.sizeBytes / 1048576.0) else ""
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.update_available, update.versionName, AppUpdater.currentVersion(this)))
+            .setMessage((update.notes.ifBlank { update.assetName } + sizeMb).take(800))
+            .setPositiveButton(getString(R.string.update_download, update.versionName)) { _, _ ->
+                downloadAndInstallUpdate(update)
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun downloadAndInstallUpdate(update: AppUpdater.UpdateInfo) {
+        binding.btnCheckUpdate.isEnabled = false
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val apk = AppUpdater.download(this@MainActivity, update.apkUrl) { pct ->
+                    lifecycleScope.launch(Dispatchers.Main) {
+                        binding.tvUpdateStatus.text = getString(R.string.update_downloading, pct)
+                    }
+                }
+                withContext(Dispatchers.Main) {
+                    binding.btnCheckUpdate.isEnabled = true
+                    binding.tvUpdateStatus.text = getString(R.string.update_install_note)
+                    val ok = AppUpdater.install(this@MainActivity, apk)
+                    if (!ok) {
+                        Toast.makeText(
+                            this@MainActivity,
+                            getString(R.string.update_install_note),
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    binding.btnCheckUpdate.isEnabled = true
+                    binding.tvUpdateStatus.text = getString(R.string.update_failed, e.message ?: "?")
+                }
             }
         }
     }

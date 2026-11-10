@@ -31,4 +31,4 @@ Algunas listas requieren sesiÃ³n. Exporta las cookies de tu navegador con una ex
 - Si una canciÃ³n falla, el resto continÃºa y el error queda anotado en el registro del trabajo.
 - Las descargas grandes pueden tardar; no cierres la ventana negra (la consola) mientras descarga.
 
-- Página de presentación del proyecto: https://sandovaljon.github.io/ytmp3/
+- Pï¿½gina de presentaciï¿½n del proyecto: https://sandovaljon.github.io/ytmp3/

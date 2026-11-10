@@ -53,16 +53,39 @@ escriben directamente en esa ruta pública.
 
 ## Versión
 
-**1.0.5** (versionCode 6, `com.sandovaljon.ytmp3`).
+**1.0.6** (versionCode 7, `com.sandovaljon.ytmp3`).
+
+- 1.0.6: auto-actualización desde GitHub Releases (botón Buscar actualización, descarga e instala el APK nuevo sin hacerlo a mano); el motor yt-dlp se sigue actualizando aparte.
 
 - 1.0.0: primera versión.
 - 1.0.1: corrige el cierre al abrir (se llamaba a `getString()` antes de `onCreate()`).
 - 1.0.2: si YouTube bloquea la descarga, la app actualiza yt-dlp sola y reintenta una vez; si falla al incrustar la portada, reintenta sin incrustarla; usa `-f bestaudio/best` y muestra el error completo de yt-dlp en el registro.
 - 1.0.3: acepta canales y perfiles (`@handle`, `/channel/`, YouTube Music): aplana las pestañas Videos/Shorts; filtro "Solo canciones (sin Shorts)" por defecto, con opciones Todo / Solo Shorts; la pestaña de origen se muestra en cada fila.
-- 1.0.4: la tarjeta de descarga lista las canciones con error al terminar (antes solo se marcaban en la lista).
 - 1.0.5: calidad por defecto 320 kbps.
+- 1.0.4: la tarjeta de descarga lista las canciones con error al terminar (antes solo se marcaban en la lista).
 
 El APK no se guarda en el repo (pesa unos 99 MB). Publícalo como asset de una Release de GitHub.
+
+## Actualización remota (sin descargar APKs a mano)
+
+La app se auto-actualiza sola desde GitHub Releases:
+
+- Al abrir, comprueba `https://api.github.com/repos/SandovalJon/ytmp3/releases/latest`
+  y compara el `tag_name` (p. ej. `v1.0.6`) con la versión instalada.
+- Si hay versión nueva, el botón **Buscar actualización de la app** cambia a
+  **Descargar e instalar 1.0.6**: descarga el primer asset `.apk` y lo instala
+  con `FileProvider` (pide permiso de “orígenes desconocidos” la primera vez).
+- El motor yt-dlp se sigue actualizando aparte sin APK nuevo
+  (botón **Actualizar motor yt-dlp**).
+
+Para publicar una actualización:
+
+1. Sube `versionCode` y `versionName` en `app/build.gradle.kts`
+   (p. ej. `versionCode = 7`, `versionName = "1.0.6"`).
+2. Compila: `./gradlew assembleDebug` → `app/build/outputs/apk/debug/app-debug.apk`.
+3. En GitHub → Releases → **New release** → tag `v1.0.6`, título `1.0.6`,
+   adjunta el APK renombrado (p. ej. `ytmp3-1.0.6.apk`) y publica.
+4. Los teléfonos con la 1.0.5 verán el aviso y se actualizarán solos.
 
 ## Compilar
 

@@ -183,6 +183,8 @@ function renderJobs(jobs) {
     const width = isFinal ? 100 : (j.total ? Math.min(100, Math.round(((j.done + inTrack) / j.total) * 1000) / 10) : 0);
     const log = (j.log || []).slice(-12).join("\n");
     const failed = (j.results || []).filter(r => r.status && r.status !== "ok");
+    const errorsOnly = (j.results || []).filter(r => r.status === "error");
+    const canRetry = isFinal && errorsOnly.length > 0;
     return `
     <div class="job" data-id="${esc(j.id)}">
       <div class="job-top">
@@ -196,7 +198,11 @@ function renderJobs(jobs) {
       </div>
       ${failed.length ? `<details class="job-failed"><summary>Ver ${failed.length} con error</summary><ul>${failed.map(r => `<li>${esc(r.title || r.id)} <span class="muted">(${esc(r.status)})</span></li>`).join("")}</ul></details>` : ""}
       ${log ? `<pre class="job-log">${esc(log)}</pre>` : ""}
-      ${j.status === "descargando" ? `<div class="job-actions"><button class="btn ghost small" data-cancel="${esc(j.id)}">Cancelar</button></div>` : ""}
+      ${j.status === "descargando"
+        ? `<div class="job-actions"><button class="btn ghost small" data-cancel="${esc(j.id)}">Cancelar</button></div>`
+        : canRetry
+          ? `<div class="job-actions"><button class="btn primary small" data-retry="${esc(j.id)}">Reintentar ${errorsOnly.length} error(es)</button></div>`
+          : ""}
     </div>`;
   }).join("");
 
@@ -205,6 +211,24 @@ function renderJobs(jobs) {
       btn.disabled = true;
       await fetch(`/api/jobs/${btn.dataset.cancel}/cancel`, { method: "POST" });
       refreshJobs();
+    });
+  });
+
+  box.querySelectorAll("[data-retry]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Reintentando…';
+      try {
+        const r = await fetch(`/api/jobs/${btn.dataset.retry}/retry`, { method: "POST" });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.error || "No se pudo reintentar.");
+        await refreshJobs();
+        startPolling();
+      } catch (err) {
+        alert("Error: " + err.message);
+        btn.disabled = false;
+        refreshJobs();
+      }
     });
   });
 }

@@ -156,6 +156,10 @@ def new_job(playlist_title: str, out_dir: str, total: int) -> dict:
         "cancel": threading.Event(),
         "proc": None,
         "results": [],
+        "items": [],
+        "quality": "320K",
+        "base_dir": out_dir,
+        "cookies_file": None,
     }
     with JOBS_LOCK:
         JOBS[job["id"]] = job
@@ -186,6 +190,10 @@ def log_job(job: dict, line: str):
         job["log"].append(line)
 
 
+MAX_ATTEMPTS = 3
+RETRY_DELAY_SECS = 3
+
+
 def download_job(job: dict, items: list, quality: str, base_dir: str, cookies_file: str | None):
     try:
         base = Path(base_dir).expanduser() if base_dir else DEFAULT_DOWNLOAD_DIR
@@ -206,7 +214,11 @@ def download_job(job: dict, items: list, quality: str, base_dir: str, cookies_fi
             job["percent"] = 0.0
             log_job(job, f"[{i}/{len(items)}] Descargando: {title}")
 
-            outtmpl = str(final_dir / f"{i:02d} - %(title)s.%(ext)s")
+            try:
+                track_no = int(item.get("num") or i)
+            except (TypeError, ValueError):
+                track_no = i
+            outtmpl = str(final_dir / f"{track_no:02d} - %(title)s.%(ext)s")
             cookies_args = []
             if cookies_file:
                 cpath = Path(cookies_file).expanduser()
@@ -223,26 +235,45 @@ def download_job(job: dict, items: list, quality: str, base_dir: str, cookies_fi
                 "--newline", "--no-colors", "--no-playlist", "--windows-filenames",
                 "-o", outtmpl, url,
             ]
-            proc = subprocess.Popen(
-                cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, encoding="utf-8", errors="replace",
-                stdin=subprocess.DEVNULL,
-            )
-            job["proc"] = proc
-            for raw in proc.stdout:
-                line = raw.rstrip()
-                if not line:
-                    continue
-                m = re.search(r"(\d+(?:\.\d+)?)%", line)
-                if m:
-                    try:
-                        job["percent"] = float(m.group(1))
-                    except ValueError:
-                        pass
-                if ("[download]" in line or "[ExtractAudio]" in line or
-                        "Destination" in line or "WARNING" in line or "ERROR" in line):
-                    log_job(job, line)
-            proc.wait()
+            success = False
+            last_code = None
+            for attempt in range(1, MAX_ATTEMPTS + 1):
+                if job["cancel"].is_set():
+                    break
+                if attempt > 1:
+                    log_job(job, f"Reintento {attempt}/{MAX_ATTEMPTS}: {title}")
+                    job["percent"] = 0.0
+                proc = subprocess.Popen(
+                    cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    text=True, encoding="utf-8", errors="replace",
+                    stdin=subprocess.DEVNULL,
+                )
+                job["proc"] = proc
+                for raw in proc.stdout:
+                    line = raw.rstrip()
+                    if not line:
+                        continue
+                    m = re.search(r"(\d+(?:\.\d+)?)%", line)
+                    if m:
+                        try:
+                            job["percent"] = float(m.group(1))
+                        except ValueError:
+                            pass
+                    if ("[download]" in line or "[ExtractAudio]" in line or
+                            "Destination" in line or "WARNING" in line or "ERROR" in line):
+                        log_job(job, line)
+                proc.wait()
+                last_code = proc.returncode
+
+                if job["cancel"].is_set():
+                    break
+                if last_code == 0:
+                    success = True
+                    break
+                if attempt < MAX_ATTEMPTS:
+                    log_job(job, f"Fallo intento {attempt}/{MAX_ATTEMPTS} ({last_code}): {title}. Reintentando en {RETRY_DELAY_SECS}s…")
+                    job["cancel"].wait(RETRY_DELAY_SECS)
+            job["proc"] = None
 
             if job["cancel"].is_set():
                 log_job(job, f"Cancelado por el usuario en: {title}")
@@ -250,13 +281,13 @@ def download_job(job: dict, items: list, quality: str, base_dir: str, cookies_fi
                 job["status"] = "cancelado"
                 break
 
-            if proc.returncode == 0:
+            if success:
                 job["done"] += 1
                 log_job(job, f"OK: {title}")
                 job["results"].append({"id": vid, "title": title, "status": "ok"})
             else:
                 job["failed"] += 1
-                log_job(job, f"ERROR ({proc.returncode}): {title}")
+                log_job(job, f"ERROR ({last_code}) tras {MAX_ATTEMPTS} intentos: {title}")
                 job["results"].append({"id": vid, "title": title, "status": "error"})
             job["percent"] = 100.0
 
@@ -334,17 +365,81 @@ def api_download():
         vid = str((it or {}).get("id") or "").strip()
         # IDs de video: 11 caracteres, alfabeto seguro
         if re.fullmatch(r"[A-Za-z0-9_-]{6,20}", vid):
-            clean_items.append({"id": vid, "title": str(it.get("title") or vid)})
+            num = (it or {}).get("index", (it or {}).get("num"))
+            try:
+                num = int(num) if num is not None else None
+            except (TypeError, ValueError):
+                num = None
+            clean_items.append({"id": vid, "title": str(it.get("title") or vid), "num": num})
     if not clean_items:
         return jsonify({"error": "No hay canciones seleccionadas."}), 400
+    # Sin número original (p. ej. reintento antiguo): numerar en orden
+    for pos, it in enumerate(clean_items, start=1):
+        if not isinstance(it.get("num"), int):
+            it["num"] = pos
 
     job = new_job(sanitize_filename(playlist_title), base_dir or str(DEFAULT_DOWNLOAD_DIR), len(clean_items))
+    job["items"] = [dict(it) for it in clean_items]
+    job["quality"] = quality
+    job["base_dir"] = base_dir or str(DEFAULT_DOWNLOAD_DIR)
+    job["cookies_file"] = cookies_file
     threading.Thread(
         target=download_job,
         args=(job, clean_items, quality, base_dir, cookies_file),
         daemon=True,
     ).start()
     return jsonify({"job_id": job["id"]})
+
+
+@app.post("/api/jobs/<jid>/retry")
+def api_retry(jid):
+    with JOBS_LOCK:
+        job = JOBS.get(jid)
+    if not job:
+        return jsonify({"error": "Job no encontrado."}), 404
+    if job.get("status") == "descargando":
+        return jsonify({"error": "El trabajo aún está en curso; cancélalo antes de reintentar."}), 409
+    failed_ids = {str(r.get("id")) for r in (job.get("results") or []) if r.get("status") == "error"}
+    if not failed_ids:
+        return jsonify({"error": "No hay errores para reintentar."}), 400
+    orig_items = job.get("items") or []
+    by_id = {str(it.get("id")): it for it in orig_items if it.get("id")}
+    if by_id:
+        retry_items = [dict(by_id[fid]) for fid in failed_ids if fid in by_id]
+        # Mantener orden original de la playlist
+        retry_items.sort(key=lambda it: (it.get("num") if isinstance(it.get("num"), int) else 9999))
+    else:
+        # Jobs antiguos sin items guardados: reconstruir desde results
+        retry_items = [
+            {"id": str(r.get("id")), "title": str(r.get("title") or r.get("id")), "num": None}
+            for r in (job.get("results") or []) if r.get("status") == "error"
+        ]
+        for pos, it in enumerate(retry_items, start=1):
+            it["num"] = pos
+    if not retry_items:
+        return jsonify({"error": "No se pudieron reconstruir los errores."}), 500
+    base_dir = job.get("base_dir") or job.get("out_dir") or str(DEFAULT_DOWNLOAD_DIR)
+    # base_dir puede ser la carpeta final ya resuelta; subir un nivel si parece serlo
+    quality = job.get("quality") or "320K"
+    cookies_file = job.get("cookies_file")
+    # Si base_dir apunta a la subcarpeta final, usar su padre como base
+    try:
+        if Path(str(base_dir)).name == sanitize_filename(job.get("title", ""), "Playlist"):
+            base_dir = str(Path(str(base_dir)).parent)
+    except Exception:
+        pass
+    new = new_job(job.get("title") or "Playlist", base_dir, len(retry_items))
+    new["items"] = [dict(it) for it in retry_items]
+    new["quality"] = quality
+    new["base_dir"] = base_dir
+    new["cookies_file"] = cookies_file
+    log_job(new, f"Reintento manual de {len(retry_items)} error(es) del trabajo {job.get('id')}")
+    threading.Thread(
+        target=download_job,
+        args=(new, retry_items, quality, base_dir, cookies_file),
+        daemon=True,
+    ).start()
+    return jsonify({"job_id": new["id"], "count": len(retry_items)})
 
 
 @app.get("/api/jobs")

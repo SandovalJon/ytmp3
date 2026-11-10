@@ -18,6 +18,14 @@
     <string name="cookies_none">Sin cookies (solo playlists públicas)</string>
     <string name="cookies_hint">Exporta las cookies de tu navegador con una extensión tipo “Get cookies.txt LOCALLY” y elige el archivo aquí. Se usa solo en tu teléfono; no se sube a ningún sitio.</string>
     <string name="update_engine">Actualizar motor yt-dlp</string>
+    <string name="check_update">Buscar actualización de la app</string>
+    <string name="checking_update">Buscando actualización…</string>
+    <string name="app_up_to_date">La app está al día (v%1$s).</string>
+    <string name="update_available">Nueva versión %1$s disponible (tienes %2$s).</string>
+    <string name="update_download">Descargar e instalar %1$s</string>
+    <string name="update_downloading">Descargando %1$d%%…</string>
+    <string name="update_install_note">Descarga completa. Si Android pide permiso, activa “Permitir” y vuelve a pulsar.</string>
+    <string name="update_failed">No se pudo actualizar: %1$s</string>
     <string name="step2">2 · Canciones</string>
     <string name="filter_label">Mostrar</string>
     <string name="f_songs">Solo canciones (sin Shorts)</string>
