@@ -90,6 +90,13 @@ a:hover { text-decoration: underline; }
 .steps b { color: var(--text); }
 .code { background: #0d0f16; border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font-family: 'Cascadia Mono', Consolas, monospace; font-size: .8rem; color: #9fe8c0; }
 .code .c { color: #5a627a; }
+.code-wrap { position: relative; }
+.copy-btn {
+  position: absolute; top: 10px; right: 10px;
+  background: var(--card2); border: 1px solid var(--border); color: var(--text);
+  border-radius: 8px; padding: 6px 12px; font-size: .78rem; font-weight: 600; cursor: pointer;
+}
+.copy-btn:hover { border-color: var(--accent); }
 
 details { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; background: var(--card2); }
 summary { cursor: pointer; font-weight: 600; }

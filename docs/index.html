@@ -5,8 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>YTMusic → MP3 · Descarga tus playlists en tu propia PC</title>
 <meta name="description" content="Aplicación local y personal para descargar playlists de YouTube Music como MP3 de alta calidad. Código abierto, sin servidores ni cuentas.">
+<link rel="canonical" href="https://sandovaljon.github.io/ytmp3/">
+<meta name="theme-color" content="#0f1117">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sandovaljon.github.io/ytmp3/">
 <meta property="og:title" content="YTMusic → MP3">
 <meta property="og:description" content="Descarga tus playlists de YouTube Music como MP3, en tu propia computadora.">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="YTMusic → MP3">
+<meta name="twitter:description" content="Playlists de YouTube Music a MP3 hasta 320 kbps, 100% local.">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"YTMusic → MP3","applicationCategory":"MultimediaApplication","operatingSystem":"Windows","offers":{"@type":"Offer","price":"0"},"description":"Descarga playlists de YouTube Music como MP3 hasta 320 kbps, 100% local."}</script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -18,6 +26,7 @@
     <div class="nav-links">
       <a href="#como-funciona">Cómo funciona</a>
       <a href="#instalacion">Instalación</a>
+      <a href="#problemas">Problemas</a>
       <a href="#faq">FAQ</a>
       <a class="btn small primary" href="https://github.com/SandovalJon/ytmp3" target="_blank" rel="noopener">Código en GitHub</a>
     </div>
@@ -77,7 +86,9 @@
   <section id="instalacion" class="panel">
     <h2>Instalación (Windows)</h2>
     <p class="muted">Requiere Python 3.11+ y conexión a Internet. Eso es todo.</p>
-    <pre class="code"><code><span class="c"># 1) Clona el repositorio</span>
+    <div class="code-wrap">
+      <button class="copy-btn" type="button" data-copy="install">Copiar</button>
+    <pre class="code" id="code-install"><code><span class="c"># 1) Clona el repositorio</span>
 git clone https://github.com/SandovalJon/ytmp3.git
 cd ytmp3
 
@@ -90,7 +101,24 @@ winget install --id DenoLand.Deno -e --scope user
 
 <span class="c"># 4) Arranca la app y abre el navegador</span>
 .venv\Scripts\python.exe app.py</code></pre>
+    </div>
     <p class="hint">O simplemente haz doble clic en <code>Iniciar.cmd</code>. La app se abre en <code>http://127.0.0.1:5088</code>.</p>
+  </section>
+
+  <section id="problemas" class="panel">
+    <h2>Si algo falla</h2>
+    <details open><summary>La página <code>127.0.0.1:5088</code> no abre o el puerto está ocupado</summary>
+      <p>Cierra otra copia de la app y reintenta. O arranca en otro puerto: <code>set PORT=5099 &amp; .venv\Scripts\python.exe app.py</code> y abre <code>http://127.0.0.1:5099</code>.</p>
+    </details>
+    <details><summary>“Deno no encontrado” o error de formato de YouTube</summary>
+      <p>Instala Deno con <code>winget install --id DenoLand.Deno -e --scope user</code>, cierra y reabre la terminal, y vuelve a arrancar con <code>.venv\Scripts\python.exe app.py</code>.</p>
+    </details>
+    <details><summary>“Inicia sesión para confirmar que no eres un bot”</summary>
+      <p>Exporta tus cookies con “Get cookies.txt LOCALLY”, guarda el archivo y pega su ruta en la app, en el campo de cookies. Es solo local.</p>
+    </details>
+    <details><summary>Una canción falla y las demás siguen</summary>
+      <p>Es normal: el error queda en el registro del trabajo. Usa el botón “Reintentar errores” cuando termine. Si falla todo, actualiza yt-dlp: <code>.venv\Scripts\python.exe -m pip install -U yt-dlp</code>.</p>
+    </details>
   </section>
 
   <section id="faq" class="panel">
@@ -121,6 +149,22 @@ winget install --id DenoLand.Deno -e --scope user
     <p class="muted">Uso personal y local · Respeta los Términos de Servicio de YouTube y los derechos de autor · No afiliado a YouTube ni a Google</p>
   </div>
 </footer>
+
+<script>
+document.querySelectorAll("[data-copy]").forEach(btn => {
+  btn.addEventListener("click", async () => {
+    const id = btn.dataset.copy === "install" ? "code-install" : btn.dataset.copy;
+    const el = document.getElementById(id);
+    if (!el) return;
+    const original = btn.textContent;
+    try {
+      await navigator.clipboard.writeText(el.innerText);
+      btn.textContent = "Copiado ✓";
+    } catch { btn.textContent = "No se pudo copiar"; }
+    setTimeout(() => { btn.textContent = original; }, 1600);
+  });
+});
+</script>
 
 </body>
 </html>
