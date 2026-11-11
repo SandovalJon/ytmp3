@@ -25,6 +25,8 @@ Algunas listas requieren sesión. Exporta las cookies de tu navegador con una ex
 ## Notas
 
 - Solo escucha en `127.0.0.1`; deliberadamente no está expuesta a la red.
+- Descarga hasta 3 canciones a la vez (ajustable con `YTMP3_PARALLEL=2`). El progreso muestra todas las activas y cancelar mata también el `ffmpeg` hijo.
+- El historial se purga solo (terminados de más de 1 día, tope 30) y tiene botón **Limpiar terminados**.
 - Deno está instalado (runtime de JS que yt-dlp necesita para algunos formatos de YouTube). Si cambias de equipo, instálalo aparte: `winget install --id DenoLand.Deno -e --scope user`.
 - Los videos eliminados o privados dentro de la playlist aparecen atenuados y con su casilla deshabilitada.
 - El progreso se actualiza solo. Puedes cancelar una descarga en curso.

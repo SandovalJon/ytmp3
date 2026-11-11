@@ -16,6 +16,7 @@ import threading
 import time
 import uuid
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
@@ -54,6 +55,62 @@ app = Flask(__name__, static_folder=str(STATIC_DIR), static_url_path="")
 
 JOBS = {}
 JOBS_LOCK = threading.Lock()
+
+# Descargas simultáneas por trabajo (1-4). Ajustable con YTMP3_PARALLEL=2.
+try:
+    MAX_PARALLEL = max(1, min(4, int(os.environ.get("YTMP3_PARALLEL", "3"))))
+except (TypeError, ValueError):
+    MAX_PARALLEL = 3
+# Historial: se purgan trabajos terminados de más de 1 día y se topa en 30.
+JOB_TTL_SECS = 24 * 3600
+MAX_JOBS = 30
+
+
+def kill_proc_tree(proc) -> None:
+    """Termina un yt-dlp y su ffmpeg hijo (evita huérfanos al cancelar)."""
+    try:
+        if proc is None or proc.poll() is not None:
+            return
+        if sys.platform.startswith("win"):
+            try:
+                subprocess.run(
+                    ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10,
+                )
+                return
+            except Exception:
+                pass
+        try:
+            proc.terminate()
+        except Exception:
+            pass
+        try:
+            proc.wait(timeout=5)
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
+def purge_jobs() -> None:
+    now = time.time()
+    with JOBS_LOCK:
+        for jid in [k for k, j in JOBS.items()
+                    if j.get("status") != "descargando"
+                    and j.get("finished") and now - j["finished"] > JOB_TTL_SECS]:
+            JOBS.pop(jid, None)
+        if len(JOBS) > MAX_JOBS:
+            ordered = sorted(JOBS.values(), key=lambda j: j.get("created", 0))
+            excess = len(JOBS) - MAX_JOBS
+            dropped = 0
+            for j in ordered:
+                if dropped >= excess:
+                    break
+                if j.get("status") != "descargando" and JOBS.pop(j["id"], None) is not None:
+                    dropped += 1
 
 
 def sanitize_filename(name: str, fallback: str = "Playlist", max_len: int = 80) -> str:
@@ -155,6 +212,9 @@ def new_job(playlist_title: str, out_dir: str, total: int) -> dict:
         "log": deque(maxlen=400),
         "cancel": threading.Event(),
         "proc": None,
+        "procs": [],
+        "active": {},
+        "lock": threading.Lock(),
         "results": [],
         "items": [],
         "quality": "320K",
@@ -195,104 +255,133 @@ RETRY_DELAY_SECS = 3
 
 
 def download_job(job: dict, items: list, quality: str, base_dir: str, cookies_file: str | None):
+    lock = job["lock"]
+    total = len(items)
+    titles = {it["id"]: (it.get("title") or it["id"]) for it in items}
     try:
         base = Path(base_dir).expanduser() if base_dir else DEFAULT_DOWNLOAD_DIR
         final_dir = base / sanitize_filename(job["title"], "Playlist")
         final_dir.mkdir(parents=True, exist_ok=True)
         job["out_dir"] = str(final_dir)
-        log_job(job, f"Carpeta de destino: {final_dir}")
+        log_job(job, f"Carpeta de destino: {final_dir} ({MAX_PARALLEL} en paralelo)")
 
-        for i, item in enumerate(items, start=1):
-            if job["cancel"].is_set():
-                job["status"] = "cancelado"
-                break
+        cookies_args = []
+        if cookies_file:
+            cpath = Path(cookies_file).expanduser()
+            if cpath.is_file():
+                cookies_args = ["--cookies", str(cpath)]
+                log_job(job, f"Usando cookies: {cpath}")
+            else:
+                log_job(job, f"Aviso: no existe el archivo de cookies: {cpath}")
 
+        def refresh_live_locked():
+            act = job["active"]
+            job["percent"] = round(sum(act.values()), 1)
+            names = [titles.get(v, v) for v in act]
+            txt = " · ".join(names)
+            job["current"] = txt[:140] + ("…" if len(txt) > 140 else "")
+
+        def one(item, pos):
             vid = item["id"]
             title = item.get("title") or vid
-            url = f"https://www.youtube.com/watch?v={vid}"
-            job["current"] = title
-            job["percent"] = 0.0
-            log_job(job, f"[{i}/{len(items)}] Descargando: {title}")
-
+            if job["cancel"].is_set():
+                return
             try:
-                track_no = int(item.get("num") or i)
+                track_no = int(item.get("num") or pos)
             except (TypeError, ValueError):
-                track_no = i
+                track_no = pos
             outtmpl = str(final_dir / f"{track_no:02d} - %(title)s.%(ext)s")
-            cookies_args = []
-            if cookies_file:
-                cpath = Path(cookies_file).expanduser()
-                if cpath.is_file():
-                    cookies_args = ["--cookies", str(cpath)]
-                    log_job(job, f"Usando cookies: {cpath}")
-                else:
-                    log_job(job, f"Aviso: no existe el archivo de cookies: {cpath}")
             cmd = [
                 sys.executable, "-m", "yt_dlp", *JS_RUNTIME_ARGS, *cookies_args,
                 "-x", "--audio-format", "mp3", "--audio-quality", quality,
                 "--embed-metadata", "--embed-thumbnail",
                 "--ffmpeg-location", FFMPEG_PATH,
                 "--newline", "--no-colors", "--no-playlist", "--windows-filenames",
-                "-o", outtmpl, url,
+                "-o", outtmpl, f"https://www.youtube.com/watch?v={vid}",
             ]
-            success = False
-            last_code = None
-            for attempt in range(1, MAX_ATTEMPTS + 1):
-                if job["cancel"].is_set():
-                    break
-                if attempt > 1:
-                    log_job(job, f"Reintento {attempt}/{MAX_ATTEMPTS}: {title}")
-                    job["percent"] = 0.0
-                proc = subprocess.Popen(
-                    cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                    text=True, encoding="utf-8", errors="replace",
-                    stdin=subprocess.DEVNULL,
-                )
-                job["proc"] = proc
-                for raw in proc.stdout:
-                    line = raw.rstrip()
-                    if not line:
-                        continue
-                    m = re.search(r"(\d+(?:\.\d+)?)%", line)
-                    if m:
-                        try:
-                            job["percent"] = float(m.group(1))
-                        except ValueError:
-                            pass
-                    if ("[download]" in line or "[ExtractAudio]" in line or
-                            "Destination" in line or "WARNING" in line or "ERROR" in line):
-                        log_job(job, line)
-                proc.wait()
-                last_code = proc.returncode
-
-                if job["cancel"].is_set():
-                    break
-                if last_code == 0:
-                    success = True
-                    break
-                if attempt < MAX_ATTEMPTS:
-                    log_job(job, f"Fallo intento {attempt}/{MAX_ATTEMPTS} ({last_code}): {title}. Reintentando en {RETRY_DELAY_SECS}s…")
-                    job["cancel"].wait(RETRY_DELAY_SECS)
-            job["proc"] = None
-
+            try:
+                with lock:
+                    job["active"][vid] = 0.0
+                    refresh_live_locked()
+                log_job(job, f"[{pos}/{total}] Descargando: {title}")
+                success = False
+                last_code = None
+                for attempt in range(1, MAX_ATTEMPTS + 1):
+                    if job["cancel"].is_set():
+                        break
+                    if attempt > 1:
+                        log_job(job, f"Reintento {attempt}/{MAX_ATTEMPTS}: {title}")
+                    try:
+                        proc = subprocess.Popen(
+                            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            text=True, encoding="utf-8", errors="replace",
+                            stdin=subprocess.DEVNULL,
+                        )
+                    except OSError as exc:
+                        last_code = -1
+                        log_job(job, f"No se pudo lanzar yt-dlp: {exc}")
+                        break
+                    with lock:
+                        job["procs"].append(proc)
+                    for raw in proc.stdout:
+                        line = raw.rstrip()
+                        if not line:
+                            continue
+                        m = re.search(r"(\d+(?:\.\d+)?)%", line)
+                        if m:
+                            try:
+                                with lock:
+                                    if vid in job["active"]:
+                                        job["active"][vid] = float(m.group(1))
+                                        refresh_live_locked()
+                            except ValueError:
+                                pass
+                        if ("[download]" in line or "[ExtractAudio]" in line or
+                                "Destination" in line or "WARNING" in line or "ERROR" in line):
+                            log_job(job, line)
+                    proc.wait()
+                    last_code = proc.returncode
+                    with lock:
+                        job["procs"] = [p for p in job["procs"] if p is not proc]
+                    if job["cancel"].is_set():
+                        break
+                    if last_code == 0:
+                        success = True
+                        break
+                    if attempt < MAX_ATTEMPTS:
+                        log_job(job, f"Fallo intento {attempt}/{MAX_ATTEMPTS} ({last_code}): {title}. Reintentando en {RETRY_DELAY_SECS}s…")
+                        if job["cancel"].wait(RETRY_DELAY_SECS):
+                            break
+            except Exception as exc:
+                log_job(job, f"Error inesperado en {title}: {exc}")
+                success = False
+                last_code = -1
+            finally:
+                with lock:
+                    job["active"].pop(vid, None)
+                    refresh_live_locked()
             if job["cancel"].is_set():
                 log_job(job, f"Cancelado por el usuario en: {title}")
-                job["results"].append({"id": vid, "title": title, "status": "cancelado"})
-                job["status"] = "cancelado"
-                break
+                with lock:
+                    job["results"].append({"id": vid, "title": title, "status": "cancelado"})
+                    if job.get("status") == "descargando":
+                        job["status"] = "cancelado"
+                return
+            with lock:
+                if success:
+                    job["done"] += 1
+                    job["results"].append({"id": vid, "title": title, "status": "ok"})
+                else:
+                    job["failed"] += 1
+                    job["results"].append({"id": vid, "title": title, "status": "error"})
+            log_job(job, f"{'OK' if success else f'ERROR ({last_code}) tras {MAX_ATTEMPTS} intentos'}: {title}")
 
-            if success:
-                job["done"] += 1
-                log_job(job, f"OK: {title}")
-                job["results"].append({"id": vid, "title": title, "status": "ok"})
-            else:
-                job["failed"] += 1
-                log_job(job, f"ERROR ({last_code}) tras {MAX_ATTEMPTS} intentos: {title}")
-                job["results"].append({"id": vid, "title": title, "status": "error"})
-            job["percent"] = 100.0
+        with ThreadPoolExecutor(max_workers=min(MAX_PARALLEL, max(1, total))) as ex:
+            list(ex.map(one, items, range(1, total + 1)))
 
-        else:
-            job["status"] = "completado" if job["failed"] == 0 else "completado con errores"
+        with lock:
+            if job.get("status") == "descargando":
+                job["status"] = "completado" if job["failed"] == 0 else "completado con errores"
         # Limpieza: si yt-dlp no pudo incrustar la portada, la deja suelta (.webp/.jpg).
         # Se borran esas imágenes; los .mp3 no se tocan.
         try:
@@ -316,6 +405,15 @@ def download_job(job: dict, items: list, quality: str, base_dir: str, cookies_fi
     finally:
         job["finished"] = time.time()
         job["proc"] = None
+        try:
+            with job["lock"]:
+                job["procs"] = []
+                job["active"] = {}
+                job["percent"] = 100.0 if job.get("status") != "descargando" else job.get("percent", 0.0)
+                job["current"] = ""
+        except Exception:
+            pass
+        purge_jobs()
 
 
 @app.get("/")
@@ -444,9 +542,19 @@ def api_retry(jid):
 
 @app.get("/api/jobs")
 def api_jobs():
+    purge_jobs()
     with JOBS_LOCK:
         jobs = sorted(JOBS.values(), key=lambda j: j["created"], reverse=True)
     return jsonify({"jobs": [job_public(j) for j in jobs]})
+
+
+@app.delete("/api/jobs")
+def api_jobs_clear():
+    with JOBS_LOCK:
+        finished = [jid for jid, j in JOBS.items() if j.get("status") != "descargando"]
+        for jid in finished:
+            JOBS.pop(jid, None)
+    return jsonify({"ok": True, "removed": len(finished)})
 
 
 @app.get("/api/jobs/<jid>")
@@ -465,12 +573,15 @@ def api_cancel(jid):
     if not job:
         return jsonify({"error": "Job no encontrado."}), 404
     job["cancel"].set()
-    proc = job.get("proc")
-    if proc and proc.poll() is None:
-        try:
-            proc.terminate()
-        except Exception:
-            pass
+    try:
+        with job["lock"]:
+            procs = list(job.get("procs") or [])
+            if job.get("proc") is not None:
+                procs.append(job["proc"])
+    except Exception:
+        procs = []
+    for proc in procs:
+        kill_proc_tree(proc)
     return jsonify({"ok": True})
 
 

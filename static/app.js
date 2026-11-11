@@ -150,6 +150,17 @@ $("#btn-open-folder").addEventListener("click", async () => {
   if (!r.ok) alert(data.error || "No se pudo abrir la carpeta.");
 });
 
+$("#btn-clear-jobs").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  try {
+    await fetch("/api/jobs", { method: "DELETE" });
+    await refreshJobs();
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 function startPolling() {
   clearInterval(pollTimer);
   pollTimer = setInterval(async () => {
@@ -179,7 +190,7 @@ function renderJobs(jobs) {
   if (!jobs.length) { box.innerHTML = '<p class="muted">Aún no hay descargas.</p>'; return; }
   box.innerHTML = jobs.map(j => {
     const isFinal = ["completado", "completado con errores", "cancelado", "error"].includes(String(j.status));
-    const inTrack = isFinal ? 0 : Math.min(Math.max(j.percent || 0, 0), 100) / 100;
+    const inTrack = isFinal ? 0 : Math.min(Math.max(j.percent || 0, 0), 100 * 3) / 100;
     const width = isFinal ? 100 : (j.total ? Math.min(100, Math.round(((j.done + inTrack) / j.total) * 1000) / 10) : 0);
     const log = (j.log || []).slice(-12).join("\n");
     const failed = (j.results || []).filter(r => r.status && r.status !== "ok");
