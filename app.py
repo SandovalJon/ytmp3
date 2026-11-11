@@ -12,6 +12,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import uuid
@@ -381,7 +382,10 @@ def download_job(job: dict, items: list, quality: str, base_dir: str, cookies_fi
 
         with lock:
             if job.get("status") == "descargando":
-                job["status"] = "completado" if job["failed"] == 0 else "completado con errores"
+                if job["cancel"].is_set():
+                    job["status"] = "cancelado"
+                else:
+                    job["status"] = "completado" if job["failed"] == 0 else "completado con errores"
         # Limpieza: si yt-dlp no pudo incrustar la portada, la deja suelta (.webp/.jpg).
         # Se borran esas imágenes; los .mp3 no se tocan.
         try:
@@ -411,6 +415,15 @@ def download_job(job: dict, items: list, quality: str, base_dir: str, cookies_fi
                 job["active"] = {}
                 job["percent"] = 100.0 if job.get("status") != "descargando" else job.get("percent", 0.0)
                 job["current"] = ""
+        except Exception:
+            pass
+        try:
+            tmp = job.get("temp_cookies")
+            if tmp:
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
         except Exception:
             pass
         purge_jobs()
@@ -457,6 +470,19 @@ def api_download():
     playlist_title = str(payload.get("playlist_title") or "Playlist")
     base_dir = str(payload.get("out_dir") or "").strip()
     cookies_file = str(payload.get("cookies_file") or "").strip() or None
+    cookies_content = str(payload.get("cookies_content") or "")
+    temp_cookies = None
+    if cookies_content.strip():
+        if len(cookies_content) > 2_000_000:
+            return jsonify({"error": "cookies.txt demasiado grande (máx 2 MB)."}), 400
+        try:
+            fd, tmppath = tempfile.mkstemp(prefix="ytmp3_cookies_", suffix=".txt")
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(cookies_content)
+        except OSError:
+            return jsonify({"error": "No se pudo guardar cookies.txt."}), 500
+        temp_cookies = tmppath
+        cookies_file = tmppath
 
     clean_items = []
     for it in items:
@@ -481,6 +507,7 @@ def api_download():
     job["quality"] = quality
     job["base_dir"] = base_dir or str(DEFAULT_DOWNLOAD_DIR)
     job["cookies_file"] = cookies_file
+    job["temp_cookies"] = temp_cookies
     threading.Thread(
         target=download_job,
         args=(job, clean_items, quality, base_dir, cookies_file),
@@ -598,6 +625,21 @@ def api_open_folder():
     return jsonify({"error": "La carpeta no existe todavía."}), 404
 
 
+def clean_stale_cookies() -> None:
+    """Borra cookies temporales de ejecuciones anteriores (p. ej. si se mató el proceso)."""
+    try:
+        tmp = Path(tempfile.gettempdir())
+        for p in tmp.glob("ytmp3_cookies_*.txt"):
+            try:
+                if time.time() - p.stat().st_mtime > 3600:
+                    p.unlink()
+            except OSError:
+                pass
+    except Exception:
+        pass
+
+
 if __name__ == "__main__":
+    clean_stale_cookies()
     # Solo local. No cambiar a 0.0.0.0.
     app.run(host="127.0.0.1", port=int(os.environ.get("PORT", "5088")), debug=False, threaded=True)

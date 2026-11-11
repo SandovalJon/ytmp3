@@ -54,16 +54,21 @@ function renderPlaylist(data) {
   const filterSel = $("#tab-filter");
   $("#tab-filter-label").hidden = !hasShorts;
   filterSel.value = "no-shorts";
+  $("#track-search").value = "";
 
   renderTrackList();
 }
 
 function visibleItems() {
   const mode = $("#tab-filter").value;
-  if ($("#tab-filter-label").hidden) return currentPlaylist.items;
-  if (mode === "only-shorts") return currentPlaylist.items.filter(t => /short/i.test(t.tab || ""));
-  if (mode === "no-shorts") return currentPlaylist.items.filter(t => !/short/i.test(t.tab || ""));
-  return currentPlaylist.items;
+  let list = currentPlaylist.items;
+  if (!$("#tab-filter-label").hidden) {
+    if (mode === "only-shorts") list = list.filter(t => /short/i.test(t.tab || ""));
+    else if (mode === "no-shorts") list = list.filter(t => !/short/i.test(t.tab || ""));
+  }
+  const q = ($("#track-search").value || "").trim().toLowerCase();
+  if (q) list = list.filter(t => `${t.title || ""} ${t.uploader || ""}`.toLowerCase().includes(q));
+  return list;
 }
 
 function renderTrackList() {
@@ -87,14 +92,18 @@ function renderTrackList() {
 }
 
 $("#tab-filter").addEventListener("change", renderTrackList);
+$("#track-search").addEventListener("input", renderTrackList);
 
 function selectedItems() {
   const ids = new Set($$(".track-check:checked").map(cb => cb.dataset.id));
   return currentPlaylist.items.filter(t => ids.has(t.id));
 }
 function updateSelCount() {
-  $("#sel-count").textContent = $$(".track-check:checked").length;
-  $("#btn-download").disabled = $$(".track-check:checked").length === 0;
+  const sel = selectedItems();
+  $("#sel-count").textContent = sel.length;
+  const secs = sel.reduce((a, t) => a + (Number(t.duration) || 0), 0);
+  $("#sel-dur").textContent = sel.length ? fmtDur(secs) : "0:00";
+  $("#btn-download").disabled = sel.length === 0;
   const boxes = $$(".track-check:not(:disabled)");
   $("#check-all").checked = boxes.length > 0 && boxes.every(b => b.checked);
   $("#check-all").indeterminate = !$("#check-all").checked && boxes.some(b => b.checked);
@@ -114,6 +123,15 @@ $("#btn-download").addEventListener("click", async () => {
   const original = btn.textContent;
   btn.innerHTML = '<span class="spinner"></span>Iniciando…';
   try {
+    let cookies_content = "";
+    const cf = $("#cookies_file").files && $("#cookies_file").files[0];
+    if (cf) {
+      if (cf.size > 1024 * 1024) throw new Error("cookies.txt demasiado grande (máx 1 MB).");
+      cookies_content = await cf.text();
+      if (!/netscape|#http|youtube|google/i.test(cookies_content)) {
+        throw new Error("Ese archivo no parece un cookies.txt válido (expórtalo con “Get cookies.txt LOCALLY”).");
+      }
+    }
     const r = await fetch("/api/download", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -122,7 +140,7 @@ $("#btn-download").addEventListener("click", async () => {
         quality: $("#quality").value,
         out_dir: $("#out_dir").value.trim(),
         playlist_title: currentPlaylist.title,
-        cookies_file: $("#cookies_file").value.trim(),
+        cookies_content,
       }),
     });
     const data = await r.json();
@@ -161,22 +179,54 @@ $("#btn-clear-jobs").addEventListener("click", async (e) => {
   }
 });
 
-function startPolling() {
+let pollDelay = 1500;
+let lastSig = "";
+let idleRounds = 0;
+let pollErrs = 0;
+let lastJobs = [];
+
+function armPolling(ms) {
   clearInterval(pollTimer);
-  pollTimer = setInterval(async () => {
-    const anyActive = await refreshJobs();
-    if (!anyActive) clearInterval(pollTimer);
-  }, 1200);
+  pollDelay = ms;
+  pollTimer = setInterval(pollTick, ms);
 }
+
+function startPolling() {
+  lastSig = "";
+  idleRounds = 0;
+  pollErrs = 0;
+  armPolling(1500);
+}
+
+async function pollTick() {
+  if (document.hidden) return;
+  const st = await refreshJobs();
+  if (st === null) {
+    if (++pollErrs > 8) { clearInterval(pollTimer); pollTimer = null; }
+    return;
+  }
+  pollErrs = 0;
+  if (!st) { clearInterval(pollTimer); pollTimer = null; pollDelay = 1500; idleRounds = 0; return; }
+  const sig = lastJobs.map(j => `${j.id}:${j.status}:${j.done}:${j.failed}:${Math.round(j.percent || 0)}`).join("|");
+  if (sig === lastSig) idleRounds++;
+  else { idleRounds = 0; lastSig = sig; }
+  const want = idleRounds >= 3 ? 4000 : 1500;
+  if (want !== pollDelay) armPolling(want);
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && !pollTimer && lastJobs.some(j => j.status === "descargando")) startPolling();
+});
 
 async function refreshJobs() {
   try {
     const r = await fetch("/api/jobs");
     const { jobs } = await r.json();
-    renderJobs(jobs || []);
-    return (jobs || []).some(j => j.status === "descargando");
+    lastJobs = jobs || [];
+    renderJobs(lastJobs);
+    return lastJobs.some(j => j.status === "descargando");
   } catch {
-    return false;
+    return null;
   }
 }
 

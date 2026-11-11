@@ -49,9 +49,8 @@
       <details class="advanced">
         <summary>Playlist privada / aviso de "inicia sesión para confirmar que no eres un bot"</summary>
         <label for="cookies_file">Archivo cookies.txt (opcional)</label>
-        <input type="text" id="cookies_file" name="cookies_file"
-               placeholder="C:\ruta\cookies.txt" />
-        <p class="hint">Exporta las cookies de tu navegador con una extensión tipo “Get cookies.txt LOCALLY” y pega aquí la ruta. Se usa solo en tu equipo; no se sube a ningún sitio.</p>
+        <input type="file" id="cookies_file" name="cookies_file" accept=".txt,text/plain">
+        <p class="hint">Exporta las cookies de tu navegador con una extensión tipo “Get cookies.txt LOCALLY” y súbelo aquí. Se usa solo para esta descarga y se borra al terminar.</p>
       </details>
 
       <p id="load-error" class="error" hidden></p>
@@ -70,7 +69,8 @@
         <input type="checkbox" id="check-all" checked>
         <label for="check-all">Seleccionar todo</label>
       </div>
-      <span class="muted"><strong id="sel-count">0</strong> de <strong id="tot-count">0</strong> seleccionadas</span>
+      <input type="search" id="track-search" placeholder="Filtrar por título o artista…" aria-label="Filtrar canciones" autocomplete="off">
+      <span class="muted"><strong id="sel-count">0</strong> de <strong id="tot-count">0</strong> · <strong id="sel-dur">0:00</strong></span>
       <label class="muted" for="tab-filter" id="tab-filter-label" hidden>Mostrar:
         <select id="tab-filter">
           <option value="no-shorts">Solo canciones (sin Shorts)</option>

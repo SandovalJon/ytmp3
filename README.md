@@ -20,7 +20,7 @@ Descarga tus playlists de YouTube / YouTube Music como archivos MP3, en tu propi
 
 ## Playlists privadas o aviso de "inicia sesión para confirmar que no eres un bot"
 
-Algunas listas requieren sesión. Exporta las cookies de tu navegador con una extensión tipo **“Get cookies.txt LOCALLY”**, guarda el archivo, e indica su ruta en el campo **Archivo cookies.txt** de la página. Se usa solo en tu equipo.
+Algunas listas requieren sesión. Exporta las cookies de tu navegador con una extensión tipo **“Get cookies.txt LOCALLY”** y súbelo en el campo **Archivo cookies.txt** de la página. Se guarda temporalmente y se borra al terminar la descarga.
 
 ## Notas
 
