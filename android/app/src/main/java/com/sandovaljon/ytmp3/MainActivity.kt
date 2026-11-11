@@ -15,6 +15,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.widget.doOnTextChanged
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -131,7 +132,13 @@ class MainActivity : AppCompatActivity() {
         binding.rvTracks.layoutManager = LinearLayoutManager(this)
         binding.rvTracks.adapter = adapter
 
+        // Buscador por título o artista (respeta el filtro de Shorts).
+        binding.etSearch.doOnTextChanged { text, _, _, _ ->
+            DownloadManager.setSearchQuery(text?.toString().orEmpty())
+        }
+
         binding.btnLoad.setOnClickListener {
+            binding.etSearch.setText("")
             DownloadManager.loadPlaylist(this, binding.etUrl.text.toString())
         }
         binding.btnCookies.setOnClickListener { pickCookies.launch("text/*") }
@@ -348,14 +355,15 @@ class MainActivity : AppCompatActivity() {
             }
             adapter.submit(shown)
             val selectable = shown.filter { !it.unavailable }
-            val selected = shown.count { it.selected && !it.unavailable }
+            val selected = shown.filter { it.selected && !it.unavailable }
+            val selSecs = state.downloadableTracks.mapNotNull { it.durationSec }.sum()
             binding.tvSelCount.text = getString(
-                R.string.selected_count, selected, shown.size
-            )
+                R.string.selected_count, selected.size, shown.size
+            ) + " · " + formatDuration(selSecs)
             binding.cbSelectAll.tag = "internal"
             binding.cbSelectAll.isChecked = selectable.isNotEmpty() && selectable.all { it.selected }
             binding.cbSelectAll.tag = null
-            binding.btnDownload.isEnabled = selected > 0 && !state.jobActive
+            binding.btnDownload.isEnabled = selected.isNotEmpty() && !state.jobActive
         } else {
             binding.cardTracks.visibility = View.GONE
         }

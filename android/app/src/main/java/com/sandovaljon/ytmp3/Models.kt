@@ -39,6 +39,7 @@ data class UiState(
     val tracks: List<Track> = emptyList(),
     val quality: String = "320K",
     val listFilter: String = FILTER_NO_SHORTS,
+    val searchQuery: String = "",
     val cookiesName: String? = null,
     val jobActive: Boolean = false,
     val jobStatus: String = "",
@@ -50,11 +51,11 @@ data class UiState(
     val log: List<String> = emptyList(),
     val outDirDisplay: String = ""
 ) {
-    /** Progreso general 0..100, igual que en la web original. */
+    /** Progreso general 0..100, igual que en la web original (suma de pistas activas en paralelo). */
     val overallPercent: Int
         get() {
             if (jobTotal <= 0) return 0
-            val inTrack = currentPercent.coerceIn(0f, 100f) / 100f
+            val inTrack = currentPercent.coerceIn(0f, 300f) / 100f
             return (((jobDone + inTrack) / jobTotal) * 100).toInt().coerceIn(0, 100)
         }
 
@@ -62,12 +63,17 @@ data class UiState(
     val hasShorts: Boolean
         get() = tracks.any { isShortTab(it.tab) }
 
-    /** Pistas visibles según el filtro (por defecto, sin Shorts). */
+    /** Pistas visibles según el filtro de Shorts y el buscador de texto. */
     val visibleTracks: List<Track>
-        get() = when (listFilter) {
-            FILTER_ONLY_SHORTS -> tracks.filter { isShortTab(it.tab) }
-            FILTER_NO_SHORTS -> tracks.filter { !isShortTab(it.tab) }
-            else -> tracks
+        get() {
+            val byTab = when (listFilter) {
+                FILTER_ONLY_SHORTS -> tracks.filter { isShortTab(it.tab) }
+                FILTER_NO_SHORTS -> tracks.filter { !isShortTab(it.tab) }
+                else -> tracks
+            }
+            val q = searchQuery.trim().lowercase()
+            if (q.isEmpty()) return byTab
+            return byTab.filter { "${it.title} ${it.uploader}".lowercase().contains(q) }
         }
 
     /** Pistas que realmente se descargarían: visibles + seleccionadas + disponibles. */

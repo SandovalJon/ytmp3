@@ -53,9 +53,9 @@ escriben directamente en esa ruta pública.
 
 ## Versión
 
-**1.0.6** (versionCode 7, `com.sandovaljon.ytmp3`).
+**1.0.7** (versionCode 8, `com.sandovaljon.ytmp3`).
 
-- 1.0.6: auto-actualización desde GitHub Releases (botón Buscar actualización, descarga e instala el APK nuevo sin hacerlo a mano); el motor yt-dlp se sigue actualizando aparte.
+- 1.0.7: buscador por título/artista, duración total de la selección y hasta 3 descargas en paralelo con progreso agregado; paridad con la web.
 
 - 1.0.0: primera versión.
 - 1.0.1: corrige el cierre al abrir (se llamaba a `getString()` antes de `onCreate()`).
@@ -81,11 +81,11 @@ La app se auto-actualiza sola desde GitHub Releases:
 Para publicar una actualización:
 
 1. Sube `versionCode` y `versionName` en `app/build.gradle.kts`
-   (p. ej. `versionCode = 7`, `versionName = "1.0.6"`).
+   (p. ej. `versionCode = 8`, `versionName = "1.0.7"`).
 2. Compila: `./gradlew assembleDebug` → `app/build/outputs/apk/debug/app-debug.apk`.
-3. En GitHub → Releases → **New release** → tag `v1.0.6`, título `1.0.6`,
-   adjunta el APK renombrado (p. ej. `ytmp3-1.0.6.apk`) y publica.
-4. Los teléfonos con la 1.0.5 verán el aviso y se actualizarán solos.
+3. En GitHub → Releases → **New release** → tag `v1.0.7`, título `1.0.7`,
+   adjunta el APK renombrado (p. ej. `ytmp3-1.0.7.apk`) y publica.
+4. Los teléfonos con la 1.0.6 verán el aviso y se actualizarán solos.
 
 ## Compilar
 

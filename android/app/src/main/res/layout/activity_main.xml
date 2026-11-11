@@ -269,6 +269,20 @@
                     android:textSize="13sp" />
             </LinearLayout>
 
+            <EditText
+                android:id="@+id/etSearch"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bg_input"
+                android:hint="@string/search_hint"
+                android:inputType="text"
+                android:maxLines="1"
+                android:padding="10dp"
+                android:textColor="@color/text"
+                android:textColorHint="@color/muted"
+                android:textSize="13sp" />
+
             <LinearLayout
                 android:id="@+id/rowFilter"
                 android:layout_width="match_parent"

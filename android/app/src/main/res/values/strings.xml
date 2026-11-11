@@ -32,6 +32,7 @@
     <string name="f_all">Todo (videos + Shorts)</string>
     <string name="f_shorts">Solo Shorts</string>
     <string name="select_all">Seleccionar todo</string>
+    <string name="search_hint">Filtrar por título o artista…</string>
     <string name="selected_count">%1$d de %2$d seleccionadas</string>
     <string name="download_selected">Descargar seleccionadas</string>
     <string name="unavailable">no disponible</string>
