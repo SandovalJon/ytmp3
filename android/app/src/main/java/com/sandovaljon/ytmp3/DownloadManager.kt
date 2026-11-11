@@ -153,10 +153,30 @@ object DownloadManager {
     /** Lo que realmente se descarga: visibles + seleccionadas + disponibles. */
     fun downloadableTracks(): List<Track> = _state.value.downloadableTracks
 
+    /** Relanza solo las pistas con error (paridad con /retry de la web). Devuelve cuántas. */
+    fun retryFailed(context: Context): Int {
+        val cur = _state.value
+        if (cur.jobActive) return 0
+        val ids = cur.tracks.filter { it.status == "error" }.map { it.id }.toSet()
+        if (ids.isEmpty()) return 0
+        pendingRetryIds = ids
+        _state.update { st ->
+            st.copy(tracks = st.tracks.map { if (it.id in ids) it.copy(status = "pendiente") else it })
+        }
+        launchService(context)
+        return ids.size
+    }
+
+    private var pendingRetryIds: Set<String>? = null
+
     /** Arranca el servicio en primer plano; el servicio ejecuta runDownload(). */
     fun startDownload(context: Context) {
         val selected = downloadableTracks()
         if (selected.isEmpty() || _state.value.jobActive) return
+        launchService(context)
+    }
+
+    private fun launchService(context: Context) {
         val intent = Intent(context, DownloadService::class.java)
             .setAction(DownloadService.ACTION_START)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -181,7 +201,14 @@ object DownloadManager {
      *  activas, igual que en la web. */
     suspend fun runDownload(context: Context) {
         val snapshot = _state.value
-        val selected = snapshot.downloadableTracks
+        val retryIds = pendingRetryIds
+        pendingRetryIds = null
+        // En reintento: solo las fallidas (con su número original para no duplicar archivos).
+        val selected = if (retryIds != null) {
+            snapshot.tracks.filter { it.id in retryIds && it.selected && !it.unavailable }
+        } else {
+            snapshot.downloadableTracks
+        }
         if (selected.isEmpty()) return
         cancelled = false
         val playlistTitle = snapshot.playlistTitle.ifBlank { "Playlist" }
@@ -321,8 +348,8 @@ object DownloadManager {
         try {
             coroutineScope {
                 val semaphore = Semaphore(MAX_PARALLEL)
-                selected.mapIndexed { pos, track ->
-                    async { semaphore.withPermit { downloadOne(track, pos + 1, selected.size) } }
+                selected.map { track ->
+                    async { semaphore.withPermit { downloadOne(track, track.index, selected.size) } }
                 }.awaitAll()
             }
         } finally {

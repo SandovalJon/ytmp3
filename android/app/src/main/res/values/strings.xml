@@ -39,6 +39,8 @@
     <string name="step3">3 · Descargas</string>
     <string name="open_folder">Abrir carpeta</string>
     <string name="cancel">Cancelar</string>
+    <string name="retry_failed">Reintentar %1$d errores</string>
+    <string name="no_errors_to_retry">No hay errores para reintentar.</string>
     <string name="no_downloads">Aún no hay descargas.</string>
     <string name="disclaimer">Herramienta para uso personal con contenido que tienes derecho a escuchar/descargar. Respeta los derechos de autor y los Términos de Servicio de YouTube. No está afiliada a YouTube ni a Google.</string>
     <string name="notif_channel">Descargas de música</string>

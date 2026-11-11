@@ -176,6 +176,12 @@ class MainActivity : AppCompatActivity() {
             DownloadManager.startDownload(this)
         }
         binding.btnCancel.setOnClickListener { DownloadManager.cancelDownload() }
+        binding.btnRetry.setOnClickListener {
+            val n = DownloadManager.retryFailed(this)
+            if (n == 0) {
+                Toast.makeText(this, R.string.no_errors_to_retry, Toast.LENGTH_SHORT).show()
+            }
+        }
         binding.btnOpenFolder.setOnClickListener { openMusicFolder() }
 
         // Si la app se abrió desde un enlace de YouTube, prellenar la URL.
@@ -392,12 +398,18 @@ class MainActivity : AppCompatActivity() {
                 "${state.currentTrack} — ${state.currentPercent.toInt()}%"
             } else ""
             val failedTracks = state.tracks.filter { it.status == "error" || it.status == "cancelado" }
+            val errorsOnly = state.tracks.filter { it.status == "error" }
             if (!state.jobActive && failedTracks.isNotEmpty()) {
                 binding.tvJobFailed.visibility = View.VISIBLE
                 binding.tvJobFailed.text = "Con error (${failedTracks.size}):\n" +
                     failedTracks.joinToString("\n") { "• ${it.title}" }
             } else {
                 binding.tvJobFailed.visibility = View.GONE
+            }
+            binding.btnRetry.visibility =
+                if (!state.jobActive && errorsOnly.isNotEmpty()) View.VISIBLE else View.GONE
+            if (errorsOnly.isNotEmpty()) {
+                binding.btnRetry.text = getString(R.string.retry_failed, errorsOnly.size)
             }
             binding.tvJobLog.text = state.log.takeLast(40).joinToString("\n")
             binding.btnCancel.visibility = if (state.jobActive) View.VISIBLE else View.GONE

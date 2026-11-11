@@ -423,6 +423,15 @@
                 android:typeface="monospace" />
 
             <Button
+                android:id="@+id/btnRetry"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="@string/retry_failed"
+                android:visibility="gone"
+                style="@style/Widget.Ytmp3.Button.Primary" />
+
+            <Button
                 android:id="@+id/btnCancel"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
