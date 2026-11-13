@@ -54,6 +54,8 @@ a:hover { text-decoration: underline; }
 @media (max-width: 640px) { .hero-copy h1 { font-size: 2.3rem; } }
 .hero-copy p { color: var(--muted); font-size: 1.08rem; max-width: 540px; }
 .hero-cta { display: flex; gap: 12px; margin-top: 24px; flex-wrap: wrap; }
+.hero-alt { margin-top: 14px; color: var(--muted); font-size: .92rem; }
+.ver-pill { font-size: .78rem; background: var(--card2); border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; color: var(--accent); vertical-align: middle; white-space: nowrap; }
 
 /* Hero art: mock de la app */
 .app-window { background: #14161f; border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 30px 60px rgba(0,0,0,.5), 0 0 80px rgba(108,140,255,.12); overflow: hidden; transform: rotate(.5deg); }

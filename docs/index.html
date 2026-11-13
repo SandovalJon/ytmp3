@@ -14,7 +14,7 @@
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="YTMusic → MP3">
 <meta name="twitter:description" content="Playlists de YouTube Music a MP3 hasta 320 kbps, 100% local.">
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"YTMusic → MP3","applicationCategory":"MultimediaApplication","operatingSystem":"Windows","offers":{"@type":"Offer","price":"0"},"description":"Descarga playlists de YouTube Music como MP3 hasta 320 kbps, 100% local."}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"YTMusic → MP3","applicationCategory":"MultimediaApplication","operatingSystem":["Windows","Android"],"offers":{"@type":"Offer","price":"0"},"description":"Descarga playlists de YouTube Music como MP3 hasta 320 kbps, 100% local."}</script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -26,6 +26,7 @@
     <div class="nav-links">
       <a href="#como-funciona">Cómo funciona</a>
       <a href="#instalacion">Instalación</a>
+      <a href="#android">Android</a>
       <a href="#problemas">Problemas</a>
       <a href="#faq">FAQ</a>
       <a class="btn small primary" href="https://github.com/SandovalJon/ytmp3" target="_blank" rel="noopener">Código en GitHub</a>
@@ -43,6 +44,7 @@
         <a class="btn primary" href="#instalacion">Quiero instalarla</a>
         <a class="btn ghost" href="https://github.com/SandovalJon/ytmp3" target="_blank" rel="noopener">Ver el código →</a>
       </div>
+      <p class="hero-alt">¿Prefieres el teléfono? <a href="#android">Descarga el APK para Android →</a></p>
     </div>
 
     <div class="hero-art" aria-hidden="true">
@@ -105,6 +107,22 @@ winget install --id DenoLand.Deno -e --scope user
     <p class="hint">O simplemente haz doble clic en <code>Iniciar.cmd</code>. La app se abre en <code>http://127.0.0.1:5088</code>.</p>
   </section>
 
+  <section id="android" class="panel">
+    <h2>También en Android <span id="apk-version" class="ver-pill">v1.0.8</span></h2>
+    <p class="muted">La misma app, nativa en Kotlin: pega la URL, elige calidad y descarga a <code>Música/YouTube Music MP3/</code>, con servicio en primer plano, notificación de progreso y cancelación.</p>
+    <div class="hero-cta">
+      <a class="btn primary" id="apk-download" href="https://github.com/SandovalJon/ytmp3/releases/latest">Descargar APK</a>
+      <a class="btn ghost" href="https://github.com/SandovalJon/ytmp3/tree/main/android" target="_blank" rel="noopener">Código Android</a>
+    </div>
+    <ol class="steps">
+      <li>Descarga el APK desde <b>Releases</b> (pesa ~100 MB: incluye yt-dlp + ffmpeg).</li>
+      <li>Tócalo para instalar; si es la primera vez, permite “Instalar apps desconocidas”.</li>
+      <li>Abre <b>YTMusic → MP3</b>, pega la URL y pulsa <b>Cargar playlist</b>.</li>
+      <li>La app se <b>auto-actualiza sola</b> desde Releases; el motor yt-dlp se actualiza aparte sin APK nuevo.</li>
+    </ol>
+    <p class="hint">Requiere Android 7.0+ (arm64 o arm de 32 bits). Uso personal, igual que la versión de PC.</p>
+  </section>
+
   <section id="problemas" class="panel">
     <h2>Si algo falla</h2>
     <details open><summary>La página <code>127.0.0.1:5088</code> no abre o el puerto está ocupado</summary>
@@ -164,6 +182,20 @@ document.querySelectorAll("[data-copy]").forEach(btn => {
     setTimeout(() => { btn.textContent = original; }, 1600);
   });
 });
+
+// Versión y enlace del APK siempre al día, desde el último Release.
+(async () => {
+  try {
+    const r = await fetch("https://api.github.com/repos/SandovalJon/ytmp3/releases/latest");
+    if (!r.ok) return;
+    const d = await r.json();
+    const apk = (d.assets || []).find(a => /\.apk$/i.test(a.name || ""));
+    const vEl = document.getElementById("apk-version");
+    if (vEl && d.tag_name) vEl.textContent = d.tag_name;
+    const dl = document.getElementById("apk-download");
+    if (dl && apk) dl.href = apk.browser_download_url;
+  } catch {}
+})();
 </script>
 
 </body>
