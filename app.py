@@ -50,6 +50,9 @@ BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 DEFAULT_DOWNLOAD_DIR = Path.home() / "Music" / "YouTube Music MP3"
 
+# Versión de la app: 1.0 = base · 1.1 = criterio «ya la tienes» · 1.2 = rango 1–7 min
+APP_VERSION = "1.2"
+
 VALID_URL_RE = re.compile(r"^(https?://)?(www\.|m\.|music\.)?youtube(-nocookie)?\.com/", re.I)
 YOUTUBE_HOST_HINTS = ("youtube.com", "youtu.be", "music.youtube.com")
 
@@ -520,7 +523,7 @@ def index():
 
 @app.get("/api/health")
 def health():
-    return jsonify({"ok": True, "ffmpeg": FFMPEG_PATH, "deno": DENO_PATH, "default_dir": str(DEFAULT_DOWNLOAD_DIR)})
+    return jsonify({"ok": True, "version": APP_VERSION, "ffmpeg": FFMPEG_PATH, "deno": DENO_PATH, "default_dir": str(DEFAULT_DOWNLOAD_DIR)})
 
 
 @app.get("/api/playlist")
@@ -758,5 +761,7 @@ def clean_stale_cookies() -> None:
 
 if __name__ == "__main__":
     clean_stale_cookies()
+    port = int(os.environ.get("PORT", "5088"))
+    print(f"YTMusic-MP3 v{APP_VERSION} - http://127.0.0.1:{port}")
     # Solo local. No cambiar a 0.0.0.0.
-    app.run(host="127.0.0.1", port=int(os.environ.get("PORT", "5088")), debug=False, threaded=True)
+    app.run(host="127.0.0.1", port=port, debug=False, threaded=True)

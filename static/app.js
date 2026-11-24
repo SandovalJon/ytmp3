@@ -15,6 +15,7 @@ const esc = (str) => String(str ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;",
 
 // Cargar carpeta por defecto
 fetch("/api/health").then(r => r.json()).then(d => {
+  if (d.version) $("#app-version").textContent = "v" + d.version;
   const saved = localStorage.getItem("ytmp3.out_dir");
   $("#out_dir").value = saved || d.default_dir || "";
   const dmin = localStorage.getItem("ytmp3.dur_min");
