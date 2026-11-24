@@ -16,6 +16,7 @@ seleccionadas como `NN - Título.mp3` en
   título, autor, duración y miniatura por canción. Las privadas o
   eliminadas aparecen atenuadas con la casilla deshabilitada.
 - Seleccionar todo o canciones individuales.
+- Criterios automáticos (paridad con la web 1.3): las canciones cuyo MP3 ya está en la carpeta de la playlist se marcan «ya la tienes», atenuadas y desmarcadas, fuera de «Seleccionar todo»; y el rango de duración (por defecto 1–7 min, editable y guardado) deja fuera las que no encajan o no tienen duración conocida. Marcar una a mano la fuerza y se descarga igual; al descargar se vuelven a verificar ambos criterios.
 - Calidad MP3: 128K, 192K, 256K, 320K (por defecto 320K).
 - Descarga con `--extract-audio --audio-format mp3 --embed-metadata
   --embed-thumbnail`, con progreso por canción y general, registro
@@ -53,8 +54,9 @@ escriben directamente en esa ruta pública.
 
 ## Versión
 
-**1.0.8** (versionCode 9, `com.sandovaljon.ytmp3`).
+**1.3** (versionCode 10, `com.sandovaljon.ytmp3`). La numeración de Android se unifica con la app de PC: ambas son la 1.3.
 
+- 1.3: numeración unificada con la app de PC (1.3) y criterios automáticos de la web: «ya la tienes» y rango de duración 1–7 min.
 - 1.0.8: botón “Reintentar N errores” (paridad con la web) y numeración estable `NN` de playlist en reintentos.
 
 - 1.0.7: buscador por título/artista, duración total de la selección y hasta 3 descargas en paralelo con progreso agregado; paridad con la web.
@@ -83,11 +85,11 @@ La app se auto-actualiza sola desde GitHub Releases:
 Para publicar una actualización:
 
 1. Sube `versionCode` y `versionName` en `app/build.gradle.kts`
-   (p. ej. `versionCode = 9`, `versionName = "1.0.8"`).
+   (p. ej. `versionCode = 10`, `versionName = "1.3"`).
 2. Compila: `./gradlew assembleDebug` → `app/build/outputs/apk/debug/app-debug.apk`.
-3. En GitHub → Releases → **New release** → tag `v1.0.8`, título `1.0.8`,
-   adjunta el APK renombrado (p. ej. `ytmp3-1.0.8.apk`) y publica.
-4. Los teléfonos con la 1.0.7 verán el aviso y se actualizarán solos.
+3. En GitHub → Releases → **New release** → tag `v1.3`, título `1.3`,
+   adjunta el APK renombrado (p. ej. `ytmp3-1.3.apk`) y publica.
+4. Los teléfonos con una versión anterior verán el aviso y se actualizarán solos.
 
 ## Compilar
 

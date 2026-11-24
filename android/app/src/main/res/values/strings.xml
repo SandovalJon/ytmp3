@@ -9,6 +9,7 @@
     <string name="load_playlist">Cargar playlist</string>
     <string name="loading_playlist">Leyendo playlist…</string>
     <string name="quality_label">Calidad de audio</string>
+    <string name="dur_label">Duración (min)</string>
     <string name="q320">MP3 320 kbps (mejor)</string>
     <string name="q256">MP3 256 kbps</string>
     <string name="q192">MP3 192 kbps (equilibrado)</string>

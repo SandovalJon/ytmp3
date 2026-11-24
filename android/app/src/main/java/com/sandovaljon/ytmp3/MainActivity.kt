@@ -90,6 +90,10 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.RequestPermission()
     ) { /* El progreso también se ve dentro de la app. */ }
 
+    private val requestReadAudio = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* Sin el permiso, «ya la tienes» solo ve lo descargado por la propia app. */ }
+
     private var pendingUpdate: AppUpdater.UpdateInfo? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -97,7 +101,25 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        DownloadManager.initPrefs(this)
         DownloadManager.initEngine(this)
+
+        // Versión visible en el encabezado (numeración unificada con la app de PC).
+        binding.tvVersion.text = "v${AppUpdater.currentVersion(this)}"
+
+        // Rango de duración (criterio de la web): guardado entre sesiones.
+        val durState = DownloadManager.state.value
+        binding.etDurMin.setText(formatMinutes(durState.durMinMin))
+        binding.etDurMax.setText(formatMinutes(durState.durMaxMin))
+        val onDurChanged = {
+            val dmin = binding.etDurMin.text.toString().replace(',', '.').toDoubleOrNull()
+            val dmax = binding.etDurMax.text.toString().replace(',', '.').toDoubleOrNull()
+            if (dmin != null && dmax != null) {
+                DownloadManager.setDurationRange(this, dmin, dmax)
+            }
+        }
+        binding.etDurMin.doOnTextChanged { _, _, _, _ -> onDurChanged() }
+        binding.etDurMax.doOnTextChanged { _, _, _, _ -> onDurChanged() }
 
         // Calidad: por defecto 320K, como en la web original.
         val spinnerAdapter = ArrayAdapter(
@@ -139,6 +161,14 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnLoad.setOnClickListener {
             binding.etSearch.setText("")
+            // Permiso de lectura de audio: permite que «ya la tienes» vea
+            // también los MP3 copiados a la carpeta por otros medios.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_AUDIO)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                requestReadAudio.launch(Manifest.permission.READ_MEDIA_AUDIO)
+            }
             DownloadManager.loadPlaylist(this, binding.etUrl.text.toString())
         }
         binding.btnCookies.setOnClickListener { pickCookies.launch("text/*") }
@@ -359,15 +389,33 @@ class MainActivity : AppCompatActivity() {
                 binding.spFilter.setSelection(filterPos)
                 binding.spFilter.tag = null
             }
-            adapter.submit(shown)
+            adapter.submit(shown, state.durMinMin, state.durMaxMin)
+            // Resumen de criterios automáticos (como en la web).
+            val criteriaParts = ArrayList<String>()
+            if (state.existingCount > 0) criteriaParts.add("${state.existingCount} ya las tienes")
+            if (state.outCount > 0) {
+                criteriaParts.add(
+                    "${state.outCount} fuera de ${formatMinutes(state.durMinMin)}–${formatMinutes(state.durMaxMin)} min"
+                )
+            }
+            if (criteriaParts.isNotEmpty()) {
+                binding.tvCriteria.visibility = View.VISIBLE
+                binding.tvCriteria.text = criteriaParts.joinToString(" · ")
+            } else {
+                binding.tvCriteria.visibility = View.GONE
+            }
             val selectable = shown.filter { !it.unavailable }
             val selected = shown.filter { it.selected && !it.unavailable }
             val selSecs = state.downloadableTracks.mapNotNull { it.durationSec }.sum()
             binding.tvSelCount.text = getString(
                 R.string.selected_count, selected.size, shown.size
             ) + " · " + formatDuration(selSecs)
+            // «Seleccionar todo» se da por marcado cuando lo están todas
+            // las auto-seleccionables (las de criterio no cuentan).
+            val autoSelectable = shown.filter { isAutoSelectable(it) }
             binding.cbSelectAll.tag = "internal"
-            binding.cbSelectAll.isChecked = selectable.isNotEmpty() && selectable.all { it.selected }
+            binding.cbSelectAll.isChecked =
+                autoSelectable.isNotEmpty() && autoSelectable.all { it.selected }
             binding.cbSelectAll.tag = null
             binding.btnDownload.isEnabled = selected.isNotEmpty() && !state.jobActive
         } else {

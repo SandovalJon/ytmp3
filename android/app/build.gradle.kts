@@ -11,8 +11,9 @@ android {
         applicationId = "com.sandovaljon.ytmp3"
         minSdk = 24
         targetSdk = 34
-        versionCode = 9
-        versionName = "1.0.8"
+        versionCode = 10
+        // Numeración unificada con la app de PC (app.py): ambas son la 1.3.
+        versionName = "1.3"
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
         }

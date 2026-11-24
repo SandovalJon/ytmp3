@@ -54,6 +54,9 @@ class TrackAdapter(
     private val onToggle: (Track, Boolean) -> Unit
 ) : RecyclerView.Adapter<TrackAdapter.ViewHolder>() {
 
+    private var durMinMin: Double = 1.0
+    private var durMaxMin: Double = 7.0
+
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val check: CheckBox = view.findViewById(R.id.cbTrack)
         val thumb: ImageView = view.findViewById(R.id.ivThumb)
@@ -63,8 +66,10 @@ class TrackAdapter(
         val status: TextView = view.findViewById(R.id.tvStatus)
     }
 
-    fun submit(newTracks: List<Track>) {
+    fun submit(newTracks: List<Track>, dmin: Double = durMinMin, dmax: Double = durMaxMin) {
         tracks = newTracks
+        durMinMin = dmin
+        durMaxMin = dmax
         notifyDataSetChanged()
     }
 
@@ -82,7 +87,11 @@ class TrackAdapter(
         holder.uploader.text = listOf(track.uploader, track.tab)
             .filter { it.isNotBlank() }.joinToString(" · ")
         holder.duration.text = formatDuration(track.durationSec)
-        holder.itemView.alpha = if (track.unavailable) 0.45f else 1f
+        holder.itemView.alpha = when {
+            track.unavailable -> 0.45f
+            track.exists || !track.inRange -> 0.55f // atenuadas, como en la web
+            else -> 1f
+        }
 
         holder.check.setOnCheckedChangeListener(null)
         holder.check.isChecked = track.selected
@@ -102,14 +111,29 @@ class TrackAdapter(
                 "error" -> "✕ error"
                 "descargando" -> "descargando…"
                 "cancelado" -> "cancelada"
+                "saltada" -> "· saltada"
                 else -> track.status
             }
             holder.status.setTextColor(
                 holder.itemView.context.getColor(
                     if (track.status == "ok") R.color.ok
-                    else if (track.status == "error") R.color.err else R.color.warn
+                    else if (track.status == "error") R.color.err
+                    else if (track.status == "saltada") R.color.muted else R.color.warn
                 )
             )
+        } else if (track.exists) {
+            // Criterio «ya la tienes» de la web: verde y desmarcada.
+            holder.status.visibility = View.VISIBLE
+            holder.status.text = "· ya la tienes"
+            holder.status.setTextColor(holder.itemView.context.getColor(R.color.ok))
+        } else if (!track.inRange) {
+            holder.status.visibility = View.VISIBLE
+            holder.status.text = if (track.durationSec == null) {
+                "· duración desconocida"
+            } else {
+                "· fuera de ${formatMinutes(durMinMin)}–${formatMinutes(durMaxMin)} min"
+            }
+            holder.status.setTextColor(holder.itemView.context.getColor(R.color.warn))
         } else {
             holder.status.visibility = View.GONE
         }

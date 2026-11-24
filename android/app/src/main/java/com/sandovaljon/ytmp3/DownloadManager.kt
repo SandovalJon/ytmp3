@@ -67,6 +67,102 @@ object DownloadManager {
         _state.update { it.copy(quality = quality) }
     }
 
+    // --- Criterios automáticos (paridad con la app de PC v1.3) ---
+
+    private const val PREFS = "ytmp3_prefs"
+    private const val KEY_DUR_MIN = "dur_min_min"
+    private const val KEY_DUR_MAX = "dur_max_min"
+    const val DUR_MIN_DEFAULT = 1.0
+    const val DUR_MAX_DEFAULT = 7.0
+
+    /** Lee el rango de duración guardado (por defecto 1–7 min, como en la web). */
+    fun initPrefs(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val dmin = prefs.getFloat(KEY_DUR_MIN, DUR_MIN_DEFAULT.toFloat()).toDouble()
+        val dmax = prefs.getFloat(KEY_DUR_MAX, DUR_MAX_DEFAULT.toFloat()).toDouble()
+        _state.update { it.copy(durMinMin = dmin, durMaxMin = dmax) }
+    }
+
+    /**
+     * Guarda el rango y lo reaplica a la lista ya cargada: las canciones
+     * que quedan fuera se desmarcan, salvo las forzadas a mano.
+     */
+    fun setDurationRange(context: Context, dminRaw: Double, dmaxRaw: Double) {
+        val dmin = maxOf(0.0, dminRaw)
+        val dmax = maxOf(dmin, dmaxRaw)
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putFloat(KEY_DUR_MIN, dmin.toFloat())
+            .putFloat(KEY_DUR_MAX, dmax.toFloat())
+            .apply()
+        _state.update { st ->
+            val tracks = st.tracks.map { t ->
+                val inR = durationInRange(t.durationSec, dmin, dmax)
+                t.copy(inRange = inR, selected = if (!inR && !t.forced) false else t.selected)
+            }
+            st.copy(
+                durMinMin = dmin, durMaxMin = dmax, tracks = tracks,
+                outCount = tracks.count { !it.inRange && !it.unavailable }
+            )
+        }
+    }
+
+    /**
+     * Claves de título de los MP3 que ya están en la carpeta destino
+     * (Music/YouTube Music MP3/<playlist>/). Equivale a
+     * existing_title_keys() de app.py, leyendo MediaStore (Android 10+)
+     * o la carpeta pública (Android 9 o anterior).
+     */
+    fun existingTitleKeys(context: Context, folderName: String): Set<String> {
+        val names = ArrayList<String>()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val relativePath = "Music/YouTube Music MP3/$folderName/"
+            try {
+                val projection = arrayOf(MediaStore.Audio.Media.DISPLAY_NAME)
+                val selection = "${MediaStore.Audio.Media.RELATIVE_PATH} = ?"
+                context.contentResolver.query(
+                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                    projection, selection, arrayOf(relativePath), null
+                )?.use { cursor ->
+                    val col = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
+                    while (cursor.moveToNext()) {
+                        cursor.getString(col)?.let { names.add(it) }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "No se pudo leer MediaStore para «ya la tienes»", e)
+            }
+        } else {
+            val dir = File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC),
+                "YouTube Music MP3/$folderName"
+            )
+            dir.listFiles()?.forEach { if (it.extension.equals("mp3", true)) names.add(it.name) }
+        }
+        val keys = HashSet<String>()
+        for (name in names) {
+            val stem = name.substringBeforeLast('.', name)
+            val bare = stem.replace(Regex("^\\d+\\s*-\\s*"), "")
+            val k = titleKey(bare)
+            if (k.isNotEmpty()) keys.add(k)
+        }
+        return keys
+    }
+
+    /** Aplica los dos criterios a una lista recién cargada (como /api/playlist). */
+    private fun applyCriteria(context: Context, info: PlaylistInfo): List<Track> {
+        val st = _state.value
+        val keys = existingTitleKeys(context, sanitizeFilename(info.title))
+        return info.items.map { t ->
+            val exists = titleKey(t.title) in keys
+            val inRange = durationInRange(t.durationSec, st.durMinMin, st.durMaxMin)
+            t.copy(
+                exists = exists,
+                inRange = inRange,
+                selected = t.selected && !exists && inRange
+            )
+        }
+    }
+
     fun setListFilter(filter: String) {
         _state.update { it.copy(listFilter = filter) }
     }
@@ -109,12 +205,15 @@ object DownloadManager {
             _state.update { it.copy(loadingPlaylist = true, loadError = null) }
             try {
                 val info = YtDlpEngine.loadPlaylist(cleanUrl, cookiesFile)
+                val marked = applyCriteria(context, info)
                 _state.update {
                     it.copy(
                         loadingPlaylist = false,
                         playlistTitle = info.title,
                         playlistUploader = info.uploader,
-                        tracks = info.items,
+                        tracks = marked,
+                        existingCount = marked.count { t -> t.exists },
+                        outCount = marked.count { t -> !t.inRange && !t.unavailable },
                         listFilter = FILTER_NO_SHORTS,
                         searchQuery = "",
                         outDirDisplay = "Music/YouTube Music MP3/${sanitizeFilename(info.title)}"
@@ -134,16 +233,25 @@ object DownloadManager {
 
     fun toggleTrack(id: String, selected: Boolean) {
         _state.update {
-            it.copy(tracks = it.tracks.map { t -> if (t.id == id) t.copy(selected = selected) else t })
+            it.copy(tracks = it.tracks.map { t ->
+                if (t.id != id) t
+                else if (!selected) t.copy(selected = false, forced = false)
+                // Marcar a mano una que cumple un criterio = forzarla (como en la web).
+                else t.copy(selected = true, forced = t.exists || !t.inRange)
+            })
         }
     }
 
     fun toggleAll(selected: Boolean) {
-        // Solo afecta a lo visible (respeta el filtro y el buscador).
+        // Solo afecta a lo visible (respeta el filtro y el buscador) y, al
+        // marcar, solo a las auto-seleccionables: las que ya tienes y las
+        // fuera de rango quedan fuera, igual que en la web.
         val visibleIds = _state.value.visibleTracks.map { it.id }.toSet()
         _state.update {
             it.copy(tracks = it.tracks.map { t ->
-                if (t.unavailable || t.id !in visibleIds) t else t.copy(selected = selected)
+                if (t.unavailable || t.id !in visibleIds) t
+                else if (selected && !isAutoSelectable(t)) t
+                else t.copy(selected = selected, forced = if (selected) t.forced else false)
             })
         }
     }
@@ -161,7 +269,10 @@ object DownloadManager {
         if (ids.isEmpty()) return 0
         pendingRetryIds = ids
         _state.update { st ->
-            st.copy(tracks = st.tracks.map { if (it.id in ids) it.copy(status = "pendiente") else it })
+            // Reintentar es una orden manual: pasa por encima de los criterios.
+            st.copy(tracks = st.tracks.map {
+                if (it.id in ids) it.copy(status = "pendiente", forced = true) else it
+            })
         }
         launchService(context)
         return ids.size
@@ -241,6 +352,16 @@ object DownloadManager {
         }
         log("Carpeta de destino: $outDisplay ($MAX_PARALLEL en paralelo)")
         log("Motor yt-dlp: ${YtDlpEngine.version(context)}")
+        // Criterios automáticos, segunda verificación como en la web: lo
+        // que ya esté en la carpeta no se descarga otra vez, y solo entran
+        // las del rango de duración (salvo las forzadas a mano).
+        val existingKeys = ConcurrentHashMap.newKeySet<String>().apply {
+            addAll(existingTitleKeys(context, folderName))
+        }
+        if (existingKeys.isNotEmpty()) {
+            log("${existingKeys.size} MP3 ya están en la carpeta: se saltan salvo las forzadas")
+        }
+        val rangeLabel = "${formatMinutes(snapshot.durMinMin)}–${formatMinutes(snapshot.durMaxMin)} min"
 
         val titles = selected.associate { it.id to it.title }
         val activePercents = ConcurrentHashMap<String, Float>()
@@ -261,6 +382,16 @@ object DownloadManager {
 
         suspend fun downloadOne(track: Track, number: Int, total: Int) {
             if (cancelled) return
+            if (!track.forced && titleKey(track.title) in existingKeys) {
+                log("Ya la tienes, saltada: ${track.title}")
+                setTrackStatus(track.id, "saltada")
+                return
+            }
+            if (!track.forced && !track.inRange) {
+                log("Fuera de rango ($rangeLabel), saltada: ${track.title}")
+                setTrackStatus(track.id, "saltada")
+                return
+            }
             val pid = "$PROCESS_ID-${track.id}"
             activeProcessIds.add(pid)
             setTrackStatus(track.id, "descargando")
@@ -318,6 +449,7 @@ object DownloadManager {
                     log("Cancelado por el usuario en: ${track.title}")
                     return
                 }
+                existingKeys.add(titleKey(track.title))
                 doneCount.incrementAndGet()
                 setTrackStatus(track.id, "ok")
                 log("OK: ${track.title}")
