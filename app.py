@@ -16,6 +16,7 @@ import tempfile
 import threading
 import time
 import unicodedata
+import urllib.request
 import uuid
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
@@ -51,7 +52,62 @@ STATIC_DIR = BASE_DIR / "static"
 DEFAULT_DOWNLOAD_DIR = Path.home() / "Music" / "YouTube Music MP3"
 
 # Versión de la app: 1.0 = base · 1.1 = criterio «ya la tienes» · 1.2 = rango 1–7 min
-APP_VERSION = "1.2"
+# 1.3 = actualización automática al iniciar
+APP_VERSION = "1.3"
+
+# Auto-actualización: al arrancar se mira la versión publicada en GitHub
+# (rama main de este mismo repo) y, si es mayor, se descargan los archivos
+# de la app y el proceso se reinicia con el código nuevo. Sin red o con
+# cualquier fallo, la app sigue con su versión actual. Desactivable con
+# YTMP3_NO_UPDATE=1; YTMP3_UPDATED es el guarda interno anti-bucle.
+UPDATE_BASE = os.environ.get(
+    "YTMP3_UPDATE_BASE", "https://raw.githubusercontent.com/SandovalJon/ytmp3/main")
+UPDATE_FILES = ["app.py", "static/index.html", "static/app.js", "static/style.css", "Iniciar.cmd"]
+
+
+def _fetch_text(url: str, timeout: float) -> str:
+    req = urllib.request.Request(url, headers={"User-Agent": "ytmp3-updater"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read().decode("utf-8")
+
+
+def _version_tuple(v) -> tuple:
+    try:
+        return tuple(int(x) for x in str(v).strip().split("."))
+    except ValueError:
+        return (0,)
+
+
+def maybe_self_update() -> bool:
+    """True si se aplicó una actualización (el llamador debe reiniciar)."""
+    if os.environ.get("YTMP3_NO_UPDATE") or os.environ.get("YTMP3_UPDATED"):
+        return False
+    try:
+        remote_src = _fetch_text(f"{UPDATE_BASE}/app.py", timeout=4)
+        m = re.search(r'APP_VERSION\s*=\s*"([^"]+)"', remote_src)
+        if not m:
+            return False
+        remote_ver = m.group(1)
+        if _version_tuple(remote_ver) <= _version_tuple(APP_VERSION):
+            return False
+        print(f"Actualización disponible: v{APP_VERSION} -> v{remote_ver}. Descargando...")
+        staged = {}
+        for rel in UPDATE_FILES:
+            staged[rel] = remote_src if rel == "app.py" else _fetch_text(f"{UPDATE_BASE}/{rel}", timeout=10)
+            if not staged[rel].strip():
+                raise ValueError(f"archivo vacío: {rel}")
+        compile(staged["app.py"], "app.py", "exec")  # el nuevo app.py debe ser válido
+        for rel, content in staged.items():
+            dest = BASE_DIR / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            tmp = dest.with_suffix(dest.suffix + ".new")
+            tmp.write_text(content, encoding="utf-8", newline="")
+            os.replace(tmp, dest)
+        print(f"Actualizado a v{remote_ver}.")
+        return True
+    except Exception as exc:
+        print(f"Aviso: no se pudo completar la actualización ({exc}). Se sigue con v{APP_VERSION}.")
+        return False
 
 VALID_URL_RE = re.compile(r"^(https?://)?(www\.|m\.|music\.)?youtube(-nocookie)?\.com/", re.I)
 YOUTUBE_HOST_HINTS = ("youtube.com", "youtu.be", "music.youtube.com")
@@ -762,6 +818,10 @@ def clean_stale_cookies() -> None:
 if __name__ == "__main__":
     clean_stale_cookies()
     port = int(os.environ.get("PORT", "5088"))
+    if maybe_self_update():
+        print("Reiniciando con la versión nueva...")
+        os.environ["YTMP3_UPDATED"] = "1"
+        os.execv(sys.executable, [sys.executable, str(Path(__file__).resolve())])
     print(f"YTMusic-MP3 v{APP_VERSION} - http://127.0.0.1:{port}")
     # Solo local. No cambiar a 0.0.0.0.
     app.run(host="127.0.0.1", port=port, debug=False, threaded=True)
