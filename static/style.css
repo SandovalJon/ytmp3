@@ -72,7 +72,7 @@ h2 { font-size: 1.1rem; margin-bottom: 14px; display: flex; align-items: center;
 }
 
 label { display: block; font-size: .8rem; color: var(--muted); margin: 12px 0 6px; letter-spacing: .2px; }
-input[type="text"], input[type="url"], select {
+input[type="text"], input[type="url"], input[type="number"], select {
   width: 100%;
   background: var(--card2);
   border: 1px solid var(--border);
@@ -176,6 +176,8 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 .track.unavailable .t-title::after { content: " · no disponible"; color: var(--err); font-weight: 400; }
 .track.exists { opacity: .65; }
 .track.exists .t-title::after { content: " · ya la tienes"; color: var(--ok); font-weight: 400; }
+.track.outrange { opacity: .65; }
+.track.outrange .t-title::after { content: " · " attr(data-note); color: var(--warn); font-weight: 400; }
 @media (max-width: 640px) {
   .track { grid-template-columns: 24px 88px 1fr; }
   .track img { width: 88px; height: 50px; }

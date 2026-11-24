@@ -17,6 +17,10 @@ const esc = (str) => String(str ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;",
 fetch("/api/health").then(r => r.json()).then(d => {
   const saved = localStorage.getItem("ytmp3.out_dir");
   $("#out_dir").value = saved || d.default_dir || "";
+  const dmin = localStorage.getItem("ytmp3.dur_min");
+  const dmax = localStorage.getItem("ytmp3.dur_max");
+  if (dmin !== null) $("#dur_min").value = dmin;
+  if (dmax !== null) $("#dur_max").value = dmax;
 }).catch(() => {});
 
 $("#playlist-form").addEventListener("submit", async (e) => {
@@ -28,11 +32,13 @@ $("#playlist-form").addEventListener("submit", async (e) => {
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>Leyendo playlist…';
   try {
-    const r = await fetch("/api/playlist?url=" + encodeURIComponent(url) + "&dir=" + encodeURIComponent($("#out_dir").value.trim()));
+    const r = await fetch("/api/playlist?url=" + encodeURIComponent(url) + "&dir=" + encodeURIComponent($("#out_dir").value.trim()) + "&dmin=" + encodeURIComponent($("#dur_min").value) + "&dmax=" + encodeURIComponent($("#dur_max").value));
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || "No se pudo leer la playlist.");
     renderPlaylist(data);
     localStorage.setItem("ytmp3.out_dir", $("#out_dir").value.trim());
+    localStorage.setItem("ytmp3.dur_min", $("#dur_min").value);
+    localStorage.setItem("ytmp3.dur_max", $("#dur_max").value);
   } catch (err) {
     errBox.textContent = err.message;
     errBox.hidden = false;
@@ -43,11 +49,16 @@ $("#playlist-form").addEventListener("submit", async (e) => {
   }
 });
 
+const fmtMins = (secs) => {
+  const m = (Number(secs) || 0) / 60;
+  return Number.isInteger(m) ? String(m) : String(Math.round(m * 10) / 10);
+};
+
 function renderPlaylist(data) {
-  currentPlaylist = { title: data.title || "Playlist", items: data.items || [] };
+  currentPlaylist = { title: data.title || "Playlist", items: data.items || [], durMin: data.dur_min, durMax: data.dur_max };
   $("#playlist-title").textContent = currentPlaylist.title;
   const kindLabel = data.kind === "canal" ? "canal/perfil" : "playlist";
-  $("#playlist-meta").textContent = [data.uploader, `${data.count} ${kindLabel === "canal/perfil" ? "videos" : "canciones"}`, data.existing_count ? `${data.existing_count} ya en tu carpeta` : ""].filter(Boolean).join(" · ");
+  $("#playlist-meta").textContent = [data.uploader, `${data.count} ${kindLabel === "canal/perfil" ? "videos" : "canciones"}`, data.existing_count ? `${data.existing_count} ya en tu carpeta` : "", data.out_count ? `${data.out_count} fuera de ${fmtMins(data.dur_min)}–${fmtMins(data.dur_max)} min` : ""].filter(Boolean).join(" · ");
 
   // Filtro de Shorts: visible solo si hay pestaña de Shorts; por defecto, fuera.
   const hasShorts = currentPlaylist.items.some(t => /short/i.test(t.tab || ""));
@@ -74,16 +85,20 @@ function visibleItems() {
 function renderTrackList() {
   const shown = visibleItems();
   const ul = $("#track-list");
-  ul.innerHTML = shown.map((t) => `
-    <li class="track${t.unavailable ? " unavailable" : ""}${t.exists ? " exists" : ""}">
-      <input type="checkbox" class="track-check${t.exists ? " is-exists" : ""}" data-id="${esc(t.id)}" ${t.unavailable || t.exists ? "" : "checked"} ${t.unavailable ? "disabled" : ""} aria-label="Seleccionar ${esc(t.title)}">
+  ul.innerHTML = shown.map((t) => {
+    const outr = t.in_range === false && !t.unavailable;
+    const note = t.duration == null ? "duración desconocida" : `fuera de ${fmtMins(currentPlaylist.durMin)}–${fmtMins(currentPlaylist.durMax)} min`;
+    return `
+    <li class="track${t.unavailable ? " unavailable" : ""}${t.exists ? " exists" : ""}${outr ? " outrange" : ""}">
+      <input type="checkbox" class="track-check${t.exists || outr ? " is-skip" : ""}" data-id="${esc(t.id)}" ${t.unavailable || t.exists || outr ? "" : "checked"} ${t.unavailable ? "disabled" : ""} aria-label="Seleccionar ${esc(t.title)}">
       <img src="${esc(t.thumbnail)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
       <div>
-        <div class="t-title">${esc(t.title)}</div>
+        <div class="t-title"${outr ? ` data-note="${esc(note)}"` : ""}>${esc(t.title)}</div>
         <div class="t-sub">${[esc(t.uploader || ""), esc(t.tab || "")].filter(Boolean).join(" · ")}</div>
       </div>
       <div class="t-dur">${fmtDur(t.duration)}</div>
-    </li>`).join("");
+    </li>`;
+  }).join("");
 
   $("#tot-count").textContent = shown.length;
   updateSelCount();
@@ -96,8 +111,8 @@ $("#track-search").addEventListener("input", renderTrackList);
 
 function selectedItems() {
   const ids = new Set($$(".track-check:checked").map(cb => cb.dataset.id));
-  // Una «ya la tienes» marcada a mano va forzada: se descarga aunque exista.
-  return currentPlaylist.items.filter(t => ids.has(t.id)).map(t => ({ ...t, force: !!t.exists }));
+  // Una canción que un criterio dejó fuera, si se marca a mano, va forzada.
+  return currentPlaylist.items.filter(t => ids.has(t.id)).map(t => ({ ...t, force: !!(t.exists || t.in_range === false) }));
 }
 function updateSelCount() {
   const sel = selectedItems();
@@ -105,15 +120,15 @@ function updateSelCount() {
   const secs = sel.reduce((a, t) => a + (Number(t.duration) || 0), 0);
   $("#sel-dur").textContent = sel.length ? fmtDur(secs) : "0:00";
   $("#btn-download").disabled = sel.length === 0;
-  const boxes = $$(".track-check:not(:disabled):not(.is-exists)");
+  const boxes = $$(".track-check:not(:disabled):not(.is-skip)");
   $("#check-all").checked = boxes.length > 0 && boxes.every(b => b.checked);
   $("#check-all").indeterminate = !$("#check-all").checked && boxes.some(b => b.checked);
 }
 
 $("#track-list").addEventListener("change", updateSelCount);
 $("#check-all").addEventListener("change", (e) => {
-  // «Seleccionar todo» no marca las que ya tienes: esas se fuerzan a mano, una a una.
-  $$(".track-check:not(:disabled):not(.is-exists)").forEach(cb => { cb.checked = e.target.checked; });
+  // «Seleccionar todo» no marca las que un criterio dejó fuera: esas se fuerzan a mano, una a una.
+  $$(".track-check:not(:disabled):not(.is-skip)").forEach(cb => { cb.checked = e.target.checked; });
   updateSelCount();
 });
 
@@ -142,6 +157,8 @@ $("#btn-download").addEventListener("click", async () => {
         quality: $("#quality").value,
         out_dir: $("#out_dir").value.trim(),
         playlist_title: currentPlaylist.title,
+        dmin: $("#dur_min").value,
+        dmax: $("#dur_max").value,
         cookies_content,
       }),
     });
@@ -247,6 +264,7 @@ function renderJobs(jobs) {
     const log = (j.log || []).slice(-12).join("\n");
     const failed = (j.results || []).filter(r => r.status === "error" || r.status === "cancelado");
     const skipped = (j.results || []).filter(r => r.status === "saltada");
+    const skippedRange = (j.results || []).filter(r => r.status === "rango");
     const errorsOnly = (j.results || []).filter(r => r.status === "error");
     const canRetry = isFinal && errorsOnly.length > 0;
     return `
@@ -257,11 +275,12 @@ function renderJobs(jobs) {
       </div>
       <div class="progress"><div style="width:${width}%"></div></div>
       <div class="job-meta">
-        <span>${j.done}/${j.total} canciones · ${j.failed} errores${j.skipped ? ` · ${j.skipped} ya las tenías` : ""}${j.current ? " · " + esc(j.current) : ""}</span>
+        <span>${j.done}/${j.total} canciones · ${j.failed} errores${j.skipped ? ` · ${j.skipped} saltada(s)` : ""}${j.current ? " · " + esc(j.current) : ""}</span>
         <span title="${esc(j.out_dir)}">${esc(j.out_dir)}</span>
       </div>
       ${failed.length ? `<details class="job-failed"><summary>Ver ${failed.length} con error</summary><ul>${failed.map(r => `<li>${esc(r.title || r.id)} <span class="muted">(${esc(r.status)})</span></li>`).join("")}</ul></details>` : ""}
       ${skipped.length ? `<details class="job-failed"><summary>Ver ${skipped.length} saltada(s) — ya las tenías</summary><ul>${skipped.map(r => `<li>${esc(r.title || r.id)}</li>`).join("")}</ul></details>` : ""}
+      ${skippedRange.length ? `<details class="job-failed"><summary>Ver ${skippedRange.length} saltada(s) — fuera de rango</summary><ul>${skippedRange.map(r => `<li>${esc(r.title || r.id)}</li>`).join("")}</ul></details>` : ""}
       ${log ? `<pre class="job-log">${esc(log)}</pre>` : ""}
       ${j.status === "descargando"
         ? `<div class="job-actions"><button class="btn ghost small" data-cancel="${esc(j.id)}">Cancelar</button></div>`

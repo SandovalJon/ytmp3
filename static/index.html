@@ -46,6 +46,18 @@
         </div>
       </div>
 
+      <div class="grid-2">
+        <div>
+          <label for="dur_min">Duración mínima (minutos)</label>
+          <input type="number" id="dur_min" name="dur_min" value="1" min="0" step="0.5" />
+        </div>
+        <div>
+          <label for="dur_max">Duración máxima (minutos)</label>
+          <input type="number" id="dur_max" name="dur_max" value="7" min="0" step="0.5" />
+        </div>
+      </div>
+      <p class="hint">Criterio automático: solo se marcan las canciones dentro de ese rango de duración; las de fuera quedan sin marcar (puedes forzar cualquiera marcándola a mano).</p>
+
       <details class="advanced">
         <summary>Playlist privada / aviso de "inicia sesión para confirmar que no eres un bot"</summary>
         <label for="cookies_file">Archivo cookies.txt (opcional)</label>

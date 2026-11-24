@@ -135,6 +135,37 @@ def title_key(title: str) -> str:
     return re.sub(r"\s+", " ", t)
 
 
+DUR_MIN_DEFAULT = 60.0   # 1 min
+DUR_MAX_DEFAULT = 420.0  # 7 min
+
+
+def dur_range_secs(dmin_raw, dmax_raw):
+    """Rango de duración válido en segundos. La interfaz manda minutos;
+    valores ausentes o inválidos caen en el rango por defecto (1–7 min)."""
+    try:
+        dmin = float(dmin_raw) * 60
+    except (TypeError, ValueError):
+        dmin = DUR_MIN_DEFAULT
+    try:
+        dmax = float(dmax_raw) * 60
+    except (TypeError, ValueError):
+        dmax = DUR_MAX_DEFAULT
+    dmin = max(0.0, dmin)
+    dmax = max(dmin, dmax)
+    return dmin, dmax
+
+
+def duration_in_range(duration, dmin: float, dmax: float) -> bool:
+    """Sin duración conocida no se puede verificar el criterio: fuera."""
+    if duration is None:
+        return False
+    try:
+        d = float(duration)
+    except (TypeError, ValueError):
+        return False
+    return dmin <= d <= dmax
+
+
 def existing_title_keys(final_dir: Path) -> set:
     """Claves de título de los MP3 que ya están en la carpeta final."""
     keys = set()
@@ -247,6 +278,8 @@ def new_job(playlist_title: str, out_dir: str, total: int) -> dict:
         "results": [],
         "items": [],
         "quality": "320K",
+        "dmin": DUR_MIN_DEFAULT,
+        "dmax": DUR_MAX_DEFAULT,
         "base_dir": out_dir,
         "cookies_file": None,
     }
@@ -294,8 +327,12 @@ def download_job(job: dict, items: list, quality: str, base_dir: str, cookies_fi
         final_dir.mkdir(parents=True, exist_ok=True)
         job["out_dir"] = str(final_dir)
         log_job(job, f"Carpeta de destino: {final_dir} ({MAX_PARALLEL} en paralelo)")
-        # Criterio automático: lo que ya esté en la carpeta no se descarga
-        # otra vez (salvo que la canción venga forzada a mano).
+        # Criterios automáticos: lo que ya esté en la carpeta no se descarga
+        # otra vez, y solo entran las canciones dentro del rango de duración
+        # (salvo que la canción venga forzada a mano).
+        dmin = job.get("dmin", DUR_MIN_DEFAULT)
+        dmax = job.get("dmax", DUR_MAX_DEFAULT)
+        range_label = f"{dmin / 60:g}–{dmax / 60:g} min"
         existing_keys = existing_title_keys(final_dir)
         if existing_keys:
             log_job(job, f"{len(existing_keys)} MP3 ya están en la carpeta: se saltan salvo las forzadas")
@@ -326,6 +363,12 @@ def download_job(job: dict, items: list, quality: str, base_dir: str, cookies_fi
                 with lock:
                     job["skipped"] += 1
                     job["results"].append({"id": vid, "title": title, "status": "saltada"})
+                return
+            if not item.get("force") and not duration_in_range(item.get("duration"), dmin, dmax):
+                log_job(job, f"Fuera de rango ({range_label}), saltada: {title}")
+                with lock:
+                    job["skipped"] += 1
+                    job["results"].append({"id": vid, "title": title, "status": "rango"})
                 return
             try:
                 track_no = int(item.get("num") or pos)
@@ -503,12 +546,21 @@ def api_playlist():
     base_dir = (request.args.get("dir") or "").strip()
     base = Path(base_dir).expanduser() if base_dir else DEFAULT_DOWNLOAD_DIR
     keys = existing_title_keys(base / sanitize_filename(info["title"], "Playlist"))
+    # Criterio automático por duración: solo entran las del rango elegido.
+    dmin, dmax = dur_range_secs(request.args.get("dmin"), request.args.get("dmax"))
     n_existing = 0
+    n_out = 0
     for it in info["items"]:
         it["exists"] = title_key(it.get("title")) in keys
         if it["exists"]:
             n_existing += 1
+        it["in_range"] = duration_in_range(it.get("duration"), dmin, dmax)
+        if not it["in_range"] and not it.get("unavailable"):
+            n_out += 1
     info["existing_count"] = n_existing
+    info["out_count"] = n_out
+    info["dur_min"] = dmin
+    info["dur_max"] = dmax
     return jsonify(info)
 
 
@@ -536,6 +588,7 @@ def api_download():
         temp_cookies = tmppath
         cookies_file = tmppath
 
+    dmin, dmax = dur_range_secs(payload.get("dmin"), payload.get("dmax"))
     clean_items = []
     for it in items:
         vid = str((it or {}).get("id") or "").strip()
@@ -546,8 +599,12 @@ def api_download():
                 num = int(num) if num is not None else None
             except (TypeError, ValueError):
                 num = None
+            try:
+                dur = float((it or {}).get("duration"))
+            except (TypeError, ValueError):
+                dur = None
             clean_items.append({"id": vid, "title": str(it.get("title") or vid), "num": num,
-                                "force": bool((it or {}).get("force"))})
+                                "force": bool((it or {}).get("force")), "duration": dur})
     if not clean_items:
         return jsonify({"error": "No hay canciones seleccionadas."}), 400
     # Sin número original (p. ej. reintento antiguo): numerar en orden
@@ -558,6 +615,8 @@ def api_download():
     job = new_job(sanitize_filename(playlist_title), base_dir or str(DEFAULT_DOWNLOAD_DIR), len(clean_items))
     job["items"] = [dict(it) for it in clean_items]
     job["quality"] = quality
+    job["dmin"] = dmin
+    job["dmax"] = dmax
     job["base_dir"] = base_dir or str(DEFAULT_DOWNLOAD_DIR)
     job["cookies_file"] = cookies_file
     job["temp_cookies"] = temp_cookies
@@ -596,6 +655,9 @@ def api_retry(jid):
             it["num"] = pos
     if not retry_items:
         return jsonify({"error": "No se pudieron reconstruir los errores."}), 500
+    # Reintentar es una orden manual: pasa por encima de los criterios automáticos
+    for it in retry_items:
+        it["force"] = True
     base_dir = job.get("base_dir") or job.get("out_dir") or str(DEFAULT_DOWNLOAD_DIR)
     # base_dir puede ser la carpeta final ya resuelta; subir un nivel si parece serlo
     quality = job.get("quality") or "320K"
@@ -609,6 +671,8 @@ def api_retry(jid):
     new = new_job(job.get("title") or "Playlist", base_dir, len(retry_items))
     new["items"] = [dict(it) for it in retry_items]
     new["quality"] = quality
+    new["dmin"] = job.get("dmin", DUR_MIN_DEFAULT)
+    new["dmax"] = job.get("dmax", DUR_MAX_DEFAULT)
     new["base_dir"] = base_dir
     new["cookies_file"] = cookies_file
     log_job(new, f"Reintento manual de {len(retry_items)} error(es) del trabajo {job.get('id')}")
