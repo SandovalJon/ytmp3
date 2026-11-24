@@ -28,7 +28,7 @@ $("#playlist-form").addEventListener("submit", async (e) => {
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>Leyendo playlist…';
   try {
-    const r = await fetch("/api/playlist?url=" + encodeURIComponent(url));
+    const r = await fetch("/api/playlist?url=" + encodeURIComponent(url) + "&dir=" + encodeURIComponent($("#out_dir").value.trim()));
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || "No se pudo leer la playlist.");
     renderPlaylist(data);
@@ -47,7 +47,7 @@ function renderPlaylist(data) {
   currentPlaylist = { title: data.title || "Playlist", items: data.items || [] };
   $("#playlist-title").textContent = currentPlaylist.title;
   const kindLabel = data.kind === "canal" ? "canal/perfil" : "playlist";
-  $("#playlist-meta").textContent = [data.uploader, `${data.count} ${kindLabel === "canal/perfil" ? "videos" : "canciones"}`].filter(Boolean).join(" · ");
+  $("#playlist-meta").textContent = [data.uploader, `${data.count} ${kindLabel === "canal/perfil" ? "videos" : "canciones"}`, data.existing_count ? `${data.existing_count} ya en tu carpeta` : ""].filter(Boolean).join(" · ");
 
   // Filtro de Shorts: visible solo si hay pestaña de Shorts; por defecto, fuera.
   const hasShorts = currentPlaylist.items.some(t => /short/i.test(t.tab || ""));
@@ -75,8 +75,8 @@ function renderTrackList() {
   const shown = visibleItems();
   const ul = $("#track-list");
   ul.innerHTML = shown.map((t) => `
-    <li class="track${t.unavailable ? " unavailable" : ""}">
-      <input type="checkbox" class="track-check" data-id="${esc(t.id)}" ${t.unavailable ? "" : "checked"} ${t.unavailable ? "disabled" : ""} aria-label="Seleccionar ${esc(t.title)}">
+    <li class="track${t.unavailable ? " unavailable" : ""}${t.exists ? " exists" : ""}">
+      <input type="checkbox" class="track-check${t.exists ? " is-exists" : ""}" data-id="${esc(t.id)}" ${t.unavailable || t.exists ? "" : "checked"} ${t.unavailable ? "disabled" : ""} aria-label="Seleccionar ${esc(t.title)}">
       <img src="${esc(t.thumbnail)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
       <div>
         <div class="t-title">${esc(t.title)}</div>
@@ -96,7 +96,8 @@ $("#track-search").addEventListener("input", renderTrackList);
 
 function selectedItems() {
   const ids = new Set($$(".track-check:checked").map(cb => cb.dataset.id));
-  return currentPlaylist.items.filter(t => ids.has(t.id));
+  // Una «ya la tienes» marcada a mano va forzada: se descarga aunque exista.
+  return currentPlaylist.items.filter(t => ids.has(t.id)).map(t => ({ ...t, force: !!t.exists }));
 }
 function updateSelCount() {
   const sel = selectedItems();
@@ -104,14 +105,15 @@ function updateSelCount() {
   const secs = sel.reduce((a, t) => a + (Number(t.duration) || 0), 0);
   $("#sel-dur").textContent = sel.length ? fmtDur(secs) : "0:00";
   $("#btn-download").disabled = sel.length === 0;
-  const boxes = $$(".track-check:not(:disabled)");
+  const boxes = $$(".track-check:not(:disabled):not(.is-exists)");
   $("#check-all").checked = boxes.length > 0 && boxes.every(b => b.checked);
   $("#check-all").indeterminate = !$("#check-all").checked && boxes.some(b => b.checked);
 }
 
 $("#track-list").addEventListener("change", updateSelCount);
 $("#check-all").addEventListener("change", (e) => {
-  $$(".track-check:not(:disabled)").forEach(cb => { cb.checked = e.target.checked; });
+  // «Seleccionar todo» no marca las que ya tienes: esas se fuerzan a mano, una a una.
+  $$(".track-check:not(:disabled):not(.is-exists)").forEach(cb => { cb.checked = e.target.checked; });
   updateSelCount();
 });
 
@@ -207,7 +209,7 @@ async function pollTick() {
   }
   pollErrs = 0;
   if (!st) { clearInterval(pollTimer); pollTimer = null; pollDelay = 1500; idleRounds = 0; return; }
-  const sig = lastJobs.map(j => `${j.id}:${j.status}:${j.done}:${j.failed}:${Math.round(j.percent || 0)}`).join("|");
+  const sig = lastJobs.map(j => `${j.id}:${j.status}:${j.done}:${j.failed}:${j.skipped || 0}:${Math.round(j.percent || 0)}`).join("|");
   if (sig === lastSig) idleRounds++;
   else { idleRounds = 0; lastSig = sig; }
   const want = idleRounds >= 3 ? 4000 : 1500;
@@ -243,7 +245,8 @@ function renderJobs(jobs) {
     const inTrack = isFinal ? 0 : Math.min(Math.max(j.percent || 0, 0), 100 * 3) / 100;
     const width = isFinal ? 100 : (j.total ? Math.min(100, Math.round(((j.done + inTrack) / j.total) * 1000) / 10) : 0);
     const log = (j.log || []).slice(-12).join("\n");
-    const failed = (j.results || []).filter(r => r.status && r.status !== "ok");
+    const failed = (j.results || []).filter(r => r.status === "error" || r.status === "cancelado");
+    const skipped = (j.results || []).filter(r => r.status === "saltada");
     const errorsOnly = (j.results || []).filter(r => r.status === "error");
     const canRetry = isFinal && errorsOnly.length > 0;
     return `
@@ -254,10 +257,11 @@ function renderJobs(jobs) {
       </div>
       <div class="progress"><div style="width:${width}%"></div></div>
       <div class="job-meta">
-        <span>${j.done}/${j.total} canciones · ${j.failed} errores${j.current ? " · " + esc(j.current) : ""}</span>
+        <span>${j.done}/${j.total} canciones · ${j.failed} errores${j.skipped ? ` · ${j.skipped} ya las tenías` : ""}${j.current ? " · " + esc(j.current) : ""}</span>
         <span title="${esc(j.out_dir)}">${esc(j.out_dir)}</span>
       </div>
       ${failed.length ? `<details class="job-failed"><summary>Ver ${failed.length} con error</summary><ul>${failed.map(r => `<li>${esc(r.title || r.id)} <span class="muted">(${esc(r.status)})</span></li>`).join("")}</ul></details>` : ""}
+      ${skipped.length ? `<details class="job-failed"><summary>Ver ${skipped.length} saltada(s) — ya las tenías</summary><ul>${skipped.map(r => `<li>${esc(r.title || r.id)}</li>`).join("")}</ul></details>` : ""}
       ${log ? `<pre class="job-log">${esc(log)}</pre>` : ""}
       ${j.status === "descargando"
         ? `<div class="job-actions"><button class="btn ghost small" data-cancel="${esc(j.id)}">Cancelar</button></div>`

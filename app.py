@@ -15,6 +15,7 @@ import sys
 import tempfile
 import threading
 import time
+import unicodedata
 import uuid
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
@@ -123,6 +124,32 @@ def sanitize_filename(name: str, fallback: str = "Playlist", max_len: int = 80) 
     return name[:max_len].rstrip(" .") or fallback
 
 
+def title_key(title: str) -> str:
+    """Clave comparable de un título: sin acentos, en minúsculas y solo
+    letras/números. Permite comparar el título de la playlist con el nombre
+    del archivo ya descargado («NN - Título.mp3», saneado por yt-dlp) sin
+    que importen signos, guiones, guiones bajos ni mayúsculas."""
+    t = unicodedata.normalize("NFKD", title or "")
+    t = "".join(c for c in t if not unicodedata.combining(c))
+    t = re.sub(r"[^a-z0-9]+", " ", t.lower()).strip()
+    return re.sub(r"\s+", " ", t)
+
+
+def existing_title_keys(final_dir: Path) -> set:
+    """Claves de título de los MP3 que ya están en la carpeta final."""
+    keys = set()
+    try:
+        if final_dir.is_dir():
+            for p in final_dir.glob("*.mp3"):
+                name = re.sub(r"^\d+\s*-\s*", "", p.stem)
+                k = title_key(name)
+                if k:
+                    keys.add(k)
+    except OSError:
+        pass
+    return keys
+
+
 def is_youtube_url(url: str) -> bool:
     if not url:
         return False
@@ -206,6 +233,7 @@ def new_job(playlist_title: str, out_dir: str, total: int) -> dict:
         "total": total,
         "done": 0,
         "failed": 0,
+        "skipped": 0,
         "current": "",
         "percent": 0.0,
         "created": time.time(),
@@ -236,6 +264,7 @@ def job_public(job: dict) -> dict:
         "total": job["total"],
         "done": job["done"],
         "failed": job["failed"],
+        "skipped": job.get("skipped", 0),
         "current": job["current"],
         "percent": round(job["percent"], 1),
         "created": job["created"],
@@ -265,6 +294,11 @@ def download_job(job: dict, items: list, quality: str, base_dir: str, cookies_fi
         final_dir.mkdir(parents=True, exist_ok=True)
         job["out_dir"] = str(final_dir)
         log_job(job, f"Carpeta de destino: {final_dir} ({MAX_PARALLEL} en paralelo)")
+        # Criterio automático: lo que ya esté en la carpeta no se descarga
+        # otra vez (salvo que la canción venga forzada a mano).
+        existing_keys = existing_title_keys(final_dir)
+        if existing_keys:
+            log_job(job, f"{len(existing_keys)} MP3 ya están en la carpeta: se saltan salvo las forzadas")
 
         cookies_args = []
         if cookies_file:
@@ -286,6 +320,12 @@ def download_job(job: dict, items: list, quality: str, base_dir: str, cookies_fi
             vid = item["id"]
             title = item.get("title") or vid
             if job["cancel"].is_set():
+                return
+            if not item.get("force") and title_key(title) in existing_keys:
+                log_job(job, f"Ya la tienes, saltada: {title}")
+                with lock:
+                    job["skipped"] += 1
+                    job["results"].append({"id": vid, "title": title, "status": "saltada"})
                 return
             try:
                 track_no = int(item.get("num") or pos)
@@ -371,6 +411,7 @@ def download_job(job: dict, items: list, quality: str, base_dir: str, cookies_fi
             with lock:
                 if success:
                     job["done"] += 1
+                    existing_keys.add(title_key(title))
                     job["results"].append({"id": vid, "title": title, "status": "ok"})
                 else:
                     job["failed"] += 1
@@ -457,6 +498,17 @@ def api_playlist():
         return jsonify({"error": msg}), 502
     if not info["items"]:
         return jsonify({"error": "La playlist está vacía o no es accesible (¿privada?)."}), 404
+    # Criterio automático «ya la tienes»: marcar las canciones cuyo MP3 ya
+    # está en la carpeta destino (subcarpeta con el nombre de la playlist).
+    base_dir = (request.args.get("dir") or "").strip()
+    base = Path(base_dir).expanduser() if base_dir else DEFAULT_DOWNLOAD_DIR
+    keys = existing_title_keys(base / sanitize_filename(info["title"], "Playlist"))
+    n_existing = 0
+    for it in info["items"]:
+        it["exists"] = title_key(it.get("title")) in keys
+        if it["exists"]:
+            n_existing += 1
+    info["existing_count"] = n_existing
     return jsonify(info)
 
 
@@ -494,7 +546,8 @@ def api_download():
                 num = int(num) if num is not None else None
             except (TypeError, ValueError):
                 num = None
-            clean_items.append({"id": vid, "title": str(it.get("title") or vid), "num": num})
+            clean_items.append({"id": vid, "title": str(it.get("title") or vid), "num": num,
+                                "force": bool((it or {}).get("force"))})
     if not clean_items:
         return jsonify({"error": "No hay canciones seleccionadas."}), 400
     # Sin número original (p. ej. reintento antiguo): numerar en orden
